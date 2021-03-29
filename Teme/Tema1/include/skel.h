@@ -47,6 +47,24 @@ typedef struct {
 	int interface;
 } packet;
 
+struct arp_entry {
+	__u32 ip;
+	uint8_t mac[6];
+};
+
+typedef struct {
+	int len;
+	char payload[MAX_LEN];
+	int interface;
+} msg;
+
+struct route_table_entry {
+	uint32_t prefix;
+	uint32_t next_hop;
+	uint32_t mask;
+	int interface;
+} __attribute__((packed));
+
 /* Ethernet ARP packet from RFC 826 */
 struct arp_header {
 	uint16_t htype;   /* Format of hardware address */
