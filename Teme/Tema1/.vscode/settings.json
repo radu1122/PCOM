@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "skel.h": "c",
-        "ip_icmp.h": "c"
+        "ip_icmp.h": "c",
+        "if_arp.h": "c"
     }
 }

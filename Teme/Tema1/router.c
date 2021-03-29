@@ -77,14 +77,23 @@ int main(int argc, char *argv[])
 	int rc;
 	queue q = queue_create();
 	init(argc - 2, argv + 2);
+	FILE *f;
+	f = fopen("arp_tabletest.txt", "w");
 
 	rtable = malloc(sizeof(struct route_table_entry) * 66000);
 	arp_table = malloc(sizeof(struct  arp_entry) * 66000);
 	DIE(rtable == NULL, "memory err");
 	rtable_size = readRtable(rtable, argv[1]);
 	// parseArpTable();
-
+    arp_table_len = 0;
 	while (1) {
+
+		for (int i = 0; i < arp_table_len; i++) {
+				fprintf(f, "%s ", arp_table[i].ip);
+		}
+						fprintf(f, "\n");
+
+
 		rc = get_packet(&m);
 		DIE(rc < 0, "get_message");
 		/* Students will write code here */
@@ -105,7 +114,6 @@ int main(int argc, char *argv[])
 
 				arp_table_len++;	
 				arp_table[arp_table_len - 1] = newArp;
-
 					
 				queue q2 = queue_create();
 
@@ -129,4 +137,5 @@ int main(int argc, char *argv[])
 			
 		}
 	}
+	fclose(f);
 }
