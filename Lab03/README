@@ -9,3 +9,12 @@ Rulare schelet de cod:
 
 Numărul de cadre trimise se poate modifica din lib.h - COUNT.
 Măsurare timp rulare: time ./run_experiment
+
+
+Sender:
+	Am facut un for de COUNT care ia urmatorii 4 bytes din fisierul de intrare de fiecare data
+	Daca nu se primeste corect ACK se retrimite secventa respectiva de bytes
+
+Receiver:
+	Avem un for in care se primeste de COUNT
+	Se verifica paritatea si se trimite catre sender

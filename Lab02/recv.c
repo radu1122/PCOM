@@ -31,7 +31,7 @@ int main(){
 
     sscanf(r.payload, "%s %d" , inputFileName, &outputFileSize);
 
-    outputFile = open(SEND_FILE_NAME, O_WRONLY);
+    outputFile = open(SEND_FILE_NAME, O_WRONLY | O_CREAT, 0777);
 
     strcpy(s.payload, RESPONSE_STR);
     s.len = strlen(s.payload) + 1;

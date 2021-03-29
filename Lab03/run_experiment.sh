@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Lab4: LOSS=0, CORRUPT=0
-SPEED=10
-DELAY=10
+SPEED=1
+DELAY=5
 LOSS=0
 CORRUPT=0
 #BDP - to be modified when implementing sliding window

@@ -20,50 +20,59 @@ typedef struct {
 
 int main(int argc, char *argv[])
 {
-    msg t;
-    pkt p;
+    msg t, p;
 
-    int inputFile, bufferSize;
+    int inputFile, bufferSize, df = 100;
 
 	printf("[SENDER] Starting.\n");	
 	init(HOST, PORT);
     inputFile = open(SEND_FILE_NAME, O_RDONLY);
+	lseek(inputFile, 0, SEEK_SET);
 
 	printf("[SENDER]: BDP=%d\n", atoi(argv[1]));
-	
-	for (int i = 0; i < COUNT; i++) {
-		/* cleanup msg */
-		memset(&t, 0, sizeof(msg));
-		lseek(inputFile, 0, SEEK_SET);
+	df = 5;
 
+	lseek(inputFile, 0, SEEK_CUR);
 
-		bufferSize = read(inputFile, p.payload, MSGSIZE - 5);
-		
-		if (bufferSize < 0) {
-            perror("[SENDER] Unable to read from input file\n");
-        } else {
-			t.len = bufferSize;
-			p.parity = 0;
+	for (int q = 0; q < COUNT; q++) {
+        for(int i = 0; i < df; i++) {
+            memset(&t, 0, sizeof(msg));
 
-			for (int q = 0; q < bufferSize; q++) {
+            bufferSize = read(inputFile, t.payload, 4);
+            t.len = bufferSize;
+
+            if (send_message(&t) < 0) {
+                perror("[SENDER] Send error. Exiting.\n");
+                return -1;
+            }
+            printf("[SENDER] SENT MESSAGE %s\n", t.payload);
+        }
+
+        for(int i = 0; i < 5; i++) {
+            /* wait for ACK */
+            if (recv_message(&p) < 0) {
+                perror("[SENDER] Receive error. Exiting.\n");
+                return -1;
+            }
+            int parity = 0;
+            for (int q = 0; q < strlen(p.payload); q++) {
                 for (int j = 0; j < BITSNR; j++) {
-                    p.parity ^= (1 << j) & p.payload[q];
+                    parity ^= (1 << j) & p.payload[q];
                 }
             }
 
-			memcpy(t.payload, p.payload, MSGSIZE);
+            memcpy(p.payload, t.payload, strlen(p.payload));
+            t.len = strlen(p.payload);
+            if (parity == p.len) {
+                printf("[SENDER] Got reply correct ACK\n");
+            } else {
+                printf("[SENDER] Receiver didn't send correct ACK\n");
+                send_message(&t);
+                printf("[SENDER] SENT MESSAGE %d\n", i);
+            }
 
-            printf("[SENDER] Sending payload: %s\n", t.payload);
-
-            send_message(&t);
-            recv_message(&t);
-			if (strcmp(t.payload, "ACK") == 0) {
-				printf("[SENDER] Got reply ACK\n");
-			} else {
-				printf("[SENDER] Receiver didn't send ACK\n");
-			}
-		}
-	}
+        }
+    }
 
 	printf("[SENDER] Job done, all sent.\n");
 	close(inputFile);
