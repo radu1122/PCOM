@@ -25,7 +25,7 @@ int readRtable(struct route_table_entry *rtable, char fileName[100]){
 	while(fgets(line, sizeof(line), inputFile)) {
 		char group1[100], group2[100], group3[100], group4[100];
 
-		sscanf(line, "%s %s %s %s", &group1, &group2, &group3, &group4);
+		sscanf(line, "%s %s %s %s", group1, group2, group3, group4);
 
 		rtable[i].prefix = htonl(ipToInt(group1));
 		rtable[i].next_hop = htonl(ipToInt(group2));
@@ -41,7 +41,6 @@ int readRtable(struct route_table_entry *rtable, char fileName[100]){
 }
 
 struct arp_entry *get_arp_entry(__u32 ip) {
-    /* TODO 2: Implement */
     for (int i = 0; i < arp_table_len; i++) {
     	if(ip == arp_table[i].ip) {
     		return &arp_table[i];
@@ -71,18 +70,19 @@ void parseArpTable()
 	fprintf(stderr, "Done parsing ARP table.\n");
 }
 
+
 int main(int argc, char *argv[])
 {
-	msg m;
+	packet m;
 	int rc;
 	queue q = queue_create();
 	init(argc - 2, argv + 2);
 
 	rtable = malloc(sizeof(struct route_table_entry) * 66000);
-	arp_table = malloc(sizeof(struct  arp_entry) * 100);
+	arp_table = malloc(sizeof(struct  arp_entry) * 66000);
 	DIE(rtable == NULL, "memory err");
-	rtable_size = read_rtable(rtable);
-	parse_arp_table();
+	rtable_size = readRtable(rtable, argv[1]);
+	// parseArpTable();
 
 	while (1) {
 		rc = get_packet(&m);
@@ -90,13 +90,43 @@ int main(int argc, char *argv[])
 		/* Students will write code here */
 		struct ether_header *eth_hdr = (struct ether_header *) m.payload;
 		struct iphdr *ip_hdr = (struct iphdr *) (m.payload + sizeof(struct ether_header));
-		struct ether_arp *arp_hdr = (struct ether_arp * ) (m.payload + sizeof(struct ether_header));
+		struct arp_header *arp_hdr = (struct arp_header *) (m.payload + sizeof(struct ether_header));
 
 		uint16_t arp = htons(0x806);
 		uint16_t ipv4 = htons(0x800);
 
-		if (eth_hdr->ether_type == arp) {
+		if (eth_hdr->ether_type == arp) { // ARP
+			if (arp_hdr->op == htons(1)) { // ARP request
+				send_arp(arp_hdr->spa, htonl(ipToInt(get_interface_ip(m.interface))), eth_hdr, m.interface, htons(2));
+			} else { // ARP reply
+				struct arp_entry newArp;
+				memcpy(&newArp.ip, &(arp_hdr->spa), 4);
+				memcpy(newArp.mac, arp_hdr->sha, 6);
 
+				arp_table_len++;	
+				arp_table[arp_table_len - 1] = newArp;
+
+					
+				queue q2 = queue_create();
+
+				while(queue_empty(q) != 1) { // verifica toata pachetele din coada
+					packet firstPacket = * (packet *) queue_deq(q);
+					struct iphdr *ip_hdr1 = (struct iphdr *) (firstPacket.payload + sizeof(struct ether_header)); 	
+					struct arp_entry *newMac = get_arp_entry(ip_hdr1->daddr);
+
+					if (newMac == NULL) {
+						queue_enq(q2, &firstPacket);
+					} else {
+						struct ether_header *eth_hdr1 = (struct ether_header *) firstPacket.payload;
+						memcpy(eth_hdr1->ether_dhost, newMac, 6);
+						send_packet(firstPacket.interface, &firstPacket);
+					}
+
+				}
+
+				q = q2;
+			}
+			
 		}
 	}
 }

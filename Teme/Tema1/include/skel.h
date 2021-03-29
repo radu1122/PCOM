@@ -52,12 +52,6 @@ struct arp_entry {
 	uint8_t mac[6];
 };
 
-typedef struct {
-	int len;
-	char payload[MAX_LEN];
-	int interface;
-} msg;
-
 struct route_table_entry {
 	uint32_t prefix;
 	uint32_t next_hop;
