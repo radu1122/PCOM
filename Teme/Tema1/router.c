@@ -148,6 +148,57 @@ void arp_request(struct route_table_entry* best_route) {
 	send_packet(m.interface, &m);
 }
 
+
+void sendICMPscratch(packet m, int type, int code) {
+  packet sent;
+  
+  // get headers of packet we want to send
+  struct ether_header *eth_hdr = (struct ether_header *)sent.payload;
+  struct icmphdr *icmp_hdr =
+      (struct icmphdr *)(sent.payload + sizeof(struct ether_header) + sizeof(struct iphdr));
+  struct iphdr *ip_hdr = (struct iphdr *)(sent.payload + sizeof(struct ether_header));
+
+  // get headers of last received packet
+  struct ether_header *m_eth_hdr = (struct ether_header *)m.payload;
+  struct iphdr *m_ip_hdr = (struct iphdr *)(m.payload + sizeof(struct ether_header));
+  
+  // set correct length
+  sent.len = sizeof(struct ether_header) + sizeof(struct iphdr) +
+             sizeof(struct icmphdr);
+  
+  // populate ether header reversing source and target
+  eth_hdr->ether_type = htons(ETHERTYPE_IP);
+  memcpy(eth_hdr->ether_dhost, m_eth_hdr->ether_shost,
+         sizeof(uint8_t) * ETH_ALEN);
+  memcpy(eth_hdr->ether_shost, m_eth_hdr->ether_dhost,
+         sizeof(uint8_t) * ETH_ALEN);
+  
+  // populate IP with correct fields & calculate checksum
+  ip_hdr->version = 4;
+  ip_hdr->ihl = 5;
+  ip_hdr->tos = 0;
+  ip_hdr->tot_len = htons(sent.len - sizeof(struct ether_header));
+  ip_hdr->id = htons(getpid());
+  ip_hdr->frag_off = 0;
+  ip_hdr->ttl = 64;
+  ip_hdr->protocol = 1;
+  ip_hdr->saddr = m_ip_hdr->daddr;
+  ip_hdr->daddr = m_ip_hdr->saddr;
+  ip_hdr->check = 0;
+  ip_hdr->check = ip_checksum(ip_hdr, sizeof(struct iphdr));
+  
+  // populate ICMP with correct fields & calculate checksum
+  icmp_hdr->code = code;
+  icmp_hdr->type = type;
+  icmp_hdr->un.echo.id = htons(getpid());
+  icmp_hdr->un.echo.sequence = 0;
+  icmp_hdr->checksum = 0;
+  icmp_hdr->checksum = ip_checksum(icmp_hdr, sizeof(struct icmphdr));
+
+  send_packet(m.interface, &sent);
+}
+
+
 int main(int argc, char *argv[])
 {
 	packet m;
@@ -228,7 +279,6 @@ int main(int argc, char *argv[])
 			if (ip_hdr->ttl < 1) {
 				continue;
 			} else if (ip_hdr->ttl == 1) {
-
 				send_icmp(ip_hdr->saddr, ip_hdr->daddr, eth_hdr->ether_dhost, eth_hdr->ether_shost, ICMP_TIME_EXCEEDED, ICMP_NET_UNREACH, m.interface, htons(getpid()), 0);
 				continue;
 			}
@@ -245,7 +295,9 @@ int main(int argc, char *argv[])
 				char *routerIpString = get_interface_ip(m.interface);
 				inet_aton(routerIpString, &routerIp);
 				if (icmp_hdr->type == ICMP_ECHO && routerIp.s_addr == ip_hdr->daddr) {
-				sendICMPReply(m);
+				// sendICMPReply(m);
+				send_icmp(ip_hdr->saddr, ip_hdr->daddr, eth_hdr->ether_dhost, eth_hdr->ether_shost, 0, 0, m.interface, htons(getpid()), 0);
+
 				continue;
 				}
 			}
