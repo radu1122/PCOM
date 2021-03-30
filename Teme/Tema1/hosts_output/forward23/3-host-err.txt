@@ -44,9 +44,9 @@
      id        = 1
      flags     = 
      frag      = 0
-     ttl       = 63
+     ttl       = 64
      proto     = hopopt
-     chksum    = 0xf594
+     chksum    = 0x0
      src       = 192.168.2.2
      dst       = 192.168.3.2
      \options   \

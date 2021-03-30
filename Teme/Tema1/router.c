@@ -88,6 +88,65 @@ void parseArpTable()
 	fprintf(stderr, "Done parsing ARP table.\n");
 }
 
+void sendICMPReply(packet m) {
+  // get ICMP echo request headers
+  struct ether_header *eth_hdr = (struct ether_header *) m.payload;
+  struct icmphdr *icmp_hdr = (struct icmphdr *)(m.payload + sizeof(struct ether_header) + sizeof(struct iphdr));
+  struct iphdr *ip_hdr = (struct iphdr *)(m.payload + sizeof(struct ether_header));
+  
+  // set correct reply packet info
+  icmp_hdr->type = 0;
+  icmp_hdr->code = 0;
+	uint32_t *buffer;
+	memcpy(buffer, ip_hdr->daddr, sizeof(uint32_t));
+	memcpy(ip_hdr->daddr, ip_hdr->saddr, sizeof(uint32_t));
+	memcpy(ip_hdr->saddr, buffer, sizeof(uint32_t));
+  ip_hdr->ttl = 64;
+  
+  // update checksums
+  ip_hdr->check = 0;
+  ip_hdr->check = ip_checksum(ip_hdr, sizeof(struct iphdr));
+  icmp_hdr->checksum = 0;
+  icmp_hdr->checksum = ip_checksum(icmp_hdr, sizeof(struct icmphdr));
+
+  send_packet(m.interface, &m);
+}
+
+void arp_request(struct route_table_entry* best_route) {
+	
+	packet m;
+
+	struct ether_header * eth_hdr = (struct ether_header *)m.payload;
+	struct ether_arp *arp_pkt = (struct ether_arp *)(m.payload + sizeof(struct ether_header)); 
+	
+	m.len = sizeof(struct ether_header) + sizeof(struct ether_arp);
+	m.interface = best_route->interface;
+
+	//completez ether header
+	uint8_t *aux = malloc(6*sizeof(uint8_t));
+	get_interface_mac(m.interface, aux);
+	memcpy(eth_hdr->ether_shost, aux, 6);
+	memset(eth_hdr->ether_dhost, 0xff, 6);
+	eth_hdr->ether_type = htons(ETHERTYPE_ARP);
+	
+	//completez header - ul de arp
+	arp_pkt->arp_hrd = htons(ARPHRD_ETHER);
+	arp_pkt->arp_pro = htons(ETHERTYPE_IP);
+	arp_pkt->arp_hln = 6;
+	arp_pkt->arp_pln = 4;
+	arp_pkt->arp_op = htons(1);
+
+	memcpy(arp_pkt->arp_sha, eth_hdr->ether_shost, 6);
+	memset(arp_pkt->arp_tha, 0, 6);
+
+	uint32_t aux_ip = best_route->next_hop;
+	memcpy(arp_pkt->arp_tpa, &aux_ip, 4);
+	
+	aux_ip = htonl(ipToInt(get_interface_ip(m.interface)));
+	memcpy(arp_pkt->arp_spa, &aux_ip, 4);
+
+	send_packet(m.interface, &m);
+}
 
 int main(int argc, char *argv[])
 {
@@ -155,6 +214,67 @@ int main(int argc, char *argv[])
 				q = q2;
 			}
 			
+		} else if (eth_hdr->ether_type == ipv4) {
+			struct route_table_entry *route = get_best_route(ip_hdr->daddr);
+
+      		uint16_t currSum = ip_hdr->check;
+			ip_hdr->check = 0;
+			uint16_t newSum = ip_checksum(ip_hdr, sizeof(struct iphdr));
+
+			if (newSum != currSum) {
+				continue;
+			};
+
+			if (ip_hdr->ttl < 1) {
+				continue;
+			} else if (ip_hdr->ttl == 1) {
+
+				send_icmp(ip_hdr->saddr, ip_hdr->daddr, eth_hdr->ether_dhost, eth_hdr->ether_shost, ICMP_TIME_EXCEEDED, ICMP_NET_UNREACH, m.interface, htons(getpid()), 0);
+				continue;
+			}
+
+			if (route == NULL) {
+				send_icmp(ip_hdr->saddr, ip_hdr->daddr, eth_hdr->ether_dhost, eth_hdr->ether_shost, ICMP_DEST_UNREACH, ICMP_NET_UNREACH, m.interface, htons(getpid()), 0);
+				continue;
+			}
+
+			if (ip_hdr->protocol == 1) {
+				struct icmphdr *icmp_hdr = parse_icmp(m.payload);
+				struct in_addr routerIp;
+
+				char *routerIpString = get_interface_ip(m.interface);
+				inet_aton(routerIpString, &routerIp);
+				if (icmp_hdr->type == ICMP_ECHO && routerIp.s_addr == ip_hdr->daddr) {
+				sendICMPReply(m);
+				continue;
+				}
+			}
+
+			struct arp_entry *arp = get_arp_entry(ip_hdr->daddr);
+
+			if (arp == NULL) {
+				packet *p = calloc(sizeof(packet), 1);
+				memcpy(p, &m, sizeof(packet));
+				p->interface = route->interface;
+				queue_enq(q, p);
+				arp_request(route); // TODO
+			} else {
+				// ARP entry found, update header and forward
+				ip_hdr->ttl = ip_hdr->ttl - 1;
+				ip_hdr->check = 0;
+				ip_hdr->check = ip_checksum(ip_hdr, sizeof(struct iphdr));
+
+				// for (int i = 0; i < ETH_ALEN; i++) {
+				// 	eth_hdr->ether_dhost[i] = arp_table[ip_hdr->daddr].mac[i];
+				// }
+				memcpy(eth_hdr->ether_dhost, arp->mac, 6);
+
+				send_packet(route->interface, &m);
+				continue;
+			}
+
+			
+
 		}
 
 		

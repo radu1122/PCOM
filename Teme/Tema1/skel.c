@@ -223,7 +223,8 @@ void build_ethhdr(struct ether_header *eth_hdr, uint8_t *sha, uint8_t *dha, unsi
 	eth_hdr->ether_type = type;
 }
 
-void send_icmp(uint32_t daddr, uint32_t saddr, uint8_t *sha, uint8_t *dha, u_int8_t type, u_int8_t code, int interface, int id, int seq)
+void send_icmp(uint32_t daddr, uint32_t saddr, uint8_t *sha,
+uint8_t *dha, u_int8_t type, u_int8_t code, int interface, int id, int seq)
 {
 
 	struct ether_header eth_hdr;
