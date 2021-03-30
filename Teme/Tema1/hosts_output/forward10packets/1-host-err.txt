@@ -1,3 +1,0 @@
--- Wrong number of packets!
--- Expected: 20
--- Got: 0

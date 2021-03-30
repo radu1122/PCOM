@@ -1,5 +1,6 @@
 #include <queue.h>
 #include "skel.h"
+#include <netinet/if_ether.h>
 
 int interfaces[ROUTER_NUM_INTERFACES];
 struct route_table_entry *rtable;
@@ -40,6 +41,23 @@ int readRtable(struct route_table_entry *rtable, char fileName[100]){
 	return i;
 }
 
+struct route_table_entry *get_best_route(__u32 dest_ip) {
+	/* TODO 1: Implement the function */
+	int id = -1;
+	int maskMax = 0;
+	for (int i = 0; i < rtable_size; i++) {
+		if ((dest_ip & rtable[i].mask) == rtable[i].prefix && rtable[i].mask > maskMax) {
+			id = i;
+			maskMax = rtable[i].mask;
+		}
+	}
+	if (id == -1) {
+		return NULL;
+	}
+	return &rtable[id];
+}
+
+
 struct arp_entry *get_arp_entry(__u32 ip) {
     for (int i = 0; i < arp_table_len; i++) {
     	if(ip == arp_table[i].ip) {
@@ -77,8 +95,6 @@ int main(int argc, char *argv[])
 	int rc;
 	queue q = queue_create();
 	init(argc - 2, argv + 2);
-	FILE *f;
-	f = fopen("arp_tabletest.txt", "w");
 
 	rtable = malloc(sizeof(struct route_table_entry) * 66000);
 	arp_table = malloc(sizeof(struct  arp_entry) * 66000);
@@ -88,25 +104,29 @@ int main(int argc, char *argv[])
     arp_table_len = 0;
 	while (1) {
 
-		for (int i = 0; i < arp_table_len; i++) {
-				fprintf(f, "%s ", arp_table[i].ip);
-		}
-						fprintf(f, "\n");
-
 
 		rc = get_packet(&m);
 		DIE(rc < 0, "get_message");
 		/* Students will write code here */
 		struct ether_header *eth_hdr = (struct ether_header *) m.payload;
 		struct iphdr *ip_hdr = (struct iphdr *) (m.payload + sizeof(struct ether_header));
-		struct arp_header *arp_hdr = (struct arp_header *) (m.payload + sizeof(struct ether_header));
+		struct arp_header *arp_hdr = parse_arp(m.payload);
 
-		uint16_t arp = htons(0x806);
+		uint16_t arp = htons(ETHERTYPE_ARP);
 		uint16_t ipv4 = htons(0x800);
 
 		if (eth_hdr->ether_type == arp) { // ARP
+			
 			if (arp_hdr->op == htons(1)) { // ARP request
+
+				uint8_t *aux = malloc(6*sizeof(uint8_t));
+				get_interface_mac(m.interface, aux);
+				memcpy(eth_hdr->ether_dhost, eth_hdr->ether_shost, 6);
+				memcpy(eth_hdr->ether_shost, aux, 6);
+				eth_hdr->ether_type = htons(ETHERTYPE_ARP);
+
 				send_arp(arp_hdr->spa, htonl(ipToInt(get_interface_ip(m.interface))), eth_hdr, m.interface, htons(2));
+				
 			} else { // ARP reply
 				struct arp_entry newArp;
 				memcpy(&newArp.ip, &(arp_hdr->spa), 4);
@@ -127,7 +147,7 @@ int main(int argc, char *argv[])
 					} else {
 						struct ether_header *eth_hdr1 = (struct ether_header *) firstPacket.payload;
 						memcpy(eth_hdr1->ether_dhost, newMac, 6);
-						send_packet(firstPacket.interface, &firstPacket);
+						send_packet(m.interface, &firstPacket);
 					}
 
 				}
@@ -136,6 +156,7 @@ int main(int argc, char *argv[])
 			}
 			
 		}
+
+		
 	}
-	fclose(f);
 }

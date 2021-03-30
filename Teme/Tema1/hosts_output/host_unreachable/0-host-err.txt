@@ -1,1 +1,10 @@
--- No packet received
+Traceback (most recent call last):
+  File "./checker.py", line 77, in <module>
+    main()
+  File "./checker.py", line 71, in main
+    passive(args.host, args.testname)
+  File "./checker.py", line 38, in passive
+    status = fn(testname, packets)
+  File "/home/radu/Facultate/PCOM/Teme/Tema1/tests.py", line 405, in host_unreachable_p
+    assert ICMP in packets[1], "no ICMP packet from router"
+IndexError: list index out of range

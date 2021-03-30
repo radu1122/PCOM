@@ -265,7 +265,7 @@ void send_icmp(uint32_t daddr, uint32_t saddr, uint8_t *sha, uint8_t *dha, u_int
 	memcpy(payload, &icmp_hdr, sizeof(struct icmphdr));
 	packet.len = sizeof(struct ether_header) + sizeof(struct iphdr) + sizeof(struct icmphdr);
 
-	send_packet(interfaces[interface], &packet);
+	send_packet(interface, &packet);
 }
 
 void send_arp(uint32_t daddr, uint32_t saddr, struct ether_header *eth_hdr, int interface, uint16_t arp_op)
@@ -286,7 +286,7 @@ void send_arp(uint32_t daddr, uint32_t saddr, struct ether_header *eth_hdr, int 
 	memcpy(packet.payload, eth_hdr, sizeof(struct ethhdr));
 	memcpy(packet.payload + sizeof(struct ethhdr), &arp_hdr, sizeof(struct arp_header));
 	packet.len = sizeof(struct arp_header) + sizeof(struct ethhdr);
-	send_packet(interfaces[interface], &packet);
+	send_packet(interface, &packet);
 }
 
 struct arp_header* parse_arp(void *buffer)

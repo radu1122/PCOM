@@ -1,8 +1,2 @@
-Parsing ARP table
-IP: 192.168.0.2 MAC: de:ad:be:ef:00:00
-IP: 192.168.1.2 MAC: de:ad:be:ef:00:01
-IP: 192.168.2.2 MAC: de:ad:be:ef:00:02
-IP: 192.168.3.2 MAC: de:ad:be:ef:00:03
-IP: 192.0.1.1 MAC: ca:fe:ba:be:00:01
-IP: 192.0.1.2 MAC: ca:fe:ba:be:01:00
-Done parsing ARP table.
+[33]: read
+Network is down
