@@ -46,9 +46,9 @@ struct route_table_entry *get_best_route(__u32 dest_ip) {
 	int id = -1;
 	int maskMax = 0;
 	for (int i = 0; i < rtable_size; i++) {
-		if ((dest_ip & rtable[i].mask) == rtable[i].prefix && rtable[i].mask > maskMax) {
+		if ((dest_ip & rtable[i].mask) == rtable[i].prefix && rtable[i].prefix > maskMax) {
 			id = i;
-			maskMax = rtable[i].mask;
+			maskMax = rtable[i].prefix;
 		}
 	}
 	if (id == -1) {
@@ -56,6 +56,7 @@ struct route_table_entry *get_best_route(__u32 dest_ip) {
 	}
 	return &rtable[id];
 }
+
 
 
 struct arp_entry *get_arp_entry(__u32 ip) {
@@ -88,29 +89,6 @@ void parseArpTable()
 	fprintf(stderr, "Done parsing ARP table.\n");
 }
 
-void sendICMPReply(packet m) {
-  // get ICMP echo request headers
-  struct ether_header *eth_hdr = (struct ether_header *) m.payload;
-  struct icmphdr *icmp_hdr = (struct icmphdr *)(m.payload + sizeof(struct ether_header) + sizeof(struct iphdr));
-  struct iphdr *ip_hdr = (struct iphdr *)(m.payload + sizeof(struct ether_header));
-  
-  // set correct reply packet info
-  icmp_hdr->type = 0;
-  icmp_hdr->code = 0;
-	uint32_t *buffer;
-	memcpy(buffer, ip_hdr->daddr, sizeof(uint32_t));
-	memcpy(ip_hdr->daddr, ip_hdr->saddr, sizeof(uint32_t));
-	memcpy(ip_hdr->saddr, buffer, sizeof(uint32_t));
-  ip_hdr->ttl = 64;
-  
-  // update checksums
-  ip_hdr->check = 0;
-  ip_hdr->check = ip_checksum(ip_hdr, sizeof(struct iphdr));
-  icmp_hdr->checksum = 0;
-  icmp_hdr->checksum = ip_checksum(icmp_hdr, sizeof(struct icmphdr));
-
-  send_packet(m.interface, &m);
-}
 
 void arp_request(struct route_table_entry* best_route) {
 	
@@ -148,55 +126,6 @@ void arp_request(struct route_table_entry* best_route) {
 	send_packet(m.interface, &m);
 }
 
-
-void sendICMPscratch(packet m, int type, int code) {
-  packet sent;
-  
-  // get headers of packet we want to send
-  struct ether_header *eth_hdr = (struct ether_header *)sent.payload;
-  struct icmphdr *icmp_hdr =
-      (struct icmphdr *)(sent.payload + sizeof(struct ether_header) + sizeof(struct iphdr));
-  struct iphdr *ip_hdr = (struct iphdr *)(sent.payload + sizeof(struct ether_header));
-
-  // get headers of last received packet
-  struct ether_header *m_eth_hdr = (struct ether_header *)m.payload;
-  struct iphdr *m_ip_hdr = (struct iphdr *)(m.payload + sizeof(struct ether_header));
-  
-  // set correct length
-  sent.len = sizeof(struct ether_header) + sizeof(struct iphdr) +
-             sizeof(struct icmphdr);
-  
-  // populate ether header reversing source and target
-  eth_hdr->ether_type = htons(ETHERTYPE_IP);
-  memcpy(eth_hdr->ether_dhost, m_eth_hdr->ether_shost,
-         sizeof(uint8_t) * ETH_ALEN);
-  memcpy(eth_hdr->ether_shost, m_eth_hdr->ether_dhost,
-         sizeof(uint8_t) * ETH_ALEN);
-  
-  // populate IP with correct fields & calculate checksum
-  ip_hdr->version = 4;
-  ip_hdr->ihl = 5;
-  ip_hdr->tos = 0;
-  ip_hdr->tot_len = htons(sent.len - sizeof(struct ether_header));
-  ip_hdr->id = htons(getpid());
-  ip_hdr->frag_off = 0;
-  ip_hdr->ttl = 64;
-  ip_hdr->protocol = 1;
-  ip_hdr->saddr = m_ip_hdr->daddr;
-  ip_hdr->daddr = m_ip_hdr->saddr;
-  ip_hdr->check = 0;
-  ip_hdr->check = ip_checksum(ip_hdr, sizeof(struct iphdr));
-  
-  // populate ICMP with correct fields & calculate checksum
-  icmp_hdr->code = code;
-  icmp_hdr->type = type;
-  icmp_hdr->un.echo.id = htons(getpid());
-  icmp_hdr->un.echo.sequence = 0;
-  icmp_hdr->checksum = 0;
-  icmp_hdr->checksum = ip_checksum(icmp_hdr, sizeof(struct icmphdr));
-
-  send_packet(m.interface, &sent);
-}
 
 
 int main(int argc, char *argv[])
@@ -295,7 +224,6 @@ int main(int argc, char *argv[])
 				char *routerIpString = get_interface_ip(m.interface);
 				inet_aton(routerIpString, &routerIp);
 				if (icmp_hdr->type == ICMP_ECHO && routerIp.s_addr == ip_hdr->daddr) {
-				// sendICMPReply(m);
 				send_icmp(ip_hdr->saddr, ip_hdr->daddr, eth_hdr->ether_dhost, eth_hdr->ether_shost, 0, 0, m.interface, htons(getpid()), 0);
 
 				continue;
@@ -307,6 +235,8 @@ int main(int argc, char *argv[])
 			if (arp == NULL) {
 				packet *p = calloc(sizeof(packet), 1);
 				memcpy(p, &m, sizeof(packet));
+				
+
 				p->interface = route->interface;
 				queue_enq(q, p);
 				arp_request(route); // TODO
@@ -316,11 +246,11 @@ int main(int argc, char *argv[])
 				ip_hdr->check = 0;
 				ip_hdr->check = ip_checksum(ip_hdr, sizeof(struct iphdr));
 
-				// for (int i = 0; i < ETH_ALEN; i++) {
-				// 	eth_hdr->ether_dhost[i] = arp_table[ip_hdr->daddr].mac[i];
-				// }
-				memcpy(eth_hdr->ether_dhost, arp->mac, 6);
-
+				
+				// memcpy(eth_hdr->ether_dhost, &arp->mac, 6);
+				for(int i = 0; i < 6; ++i) {
+					eth_hdr->ether_dhost[i] = arp->mac[i];
+				}
 				send_packet(route->interface, &m);
 				continue;
 			}
