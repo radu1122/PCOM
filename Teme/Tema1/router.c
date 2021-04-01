@@ -42,7 +42,6 @@ int readRtable(struct route_table_entry *rtable, char fileName[100]){
 }
 
 struct route_table_entry *get_best_route(__u32 dest_ip) {
-	/* TODO 1: Implement the function */
 	int id = -1;
 	int maskMax = 0;
 	for (int i = 0; i < rtable_size; i++) {
@@ -97,8 +96,7 @@ void arp_request(struct route_table_entry* best_route) {
 	struct ether_header * eth_hdr = (struct ether_header *)m.payload;
 	struct ether_arp *arp_pkt = (struct ether_arp *)(m.payload + sizeof(struct ether_header)); 
 	
-	m.len = sizeof(struct ether_header) + sizeof(struct ether_arp);
-	m.interface = best_route->interface;
+
 
 	//completez ether header
 	uint8_t *aux = malloc(6*sizeof(uint8_t));
@@ -123,6 +121,9 @@ void arp_request(struct route_table_entry* best_route) {
 	aux_ip = htonl(ipToInt(get_interface_ip(m.interface)));
 	memcpy(arp_pkt->arp_spa, &aux_ip, 4);
 
+	m.len = sizeof(struct ether_header) + sizeof(struct ether_arp);
+	m.interface = best_route->interface;
+	
 	send_packet(m.interface, &m);
 }
 
@@ -157,7 +158,6 @@ int main(int argc, char *argv[])
 		if (eth_hdr->ether_type == arp) { // ARP
 			
 			if (arp_hdr->op == htons(1)) { // ARP request
-
 				uint8_t *aux = malloc(6*sizeof(uint8_t));
 				get_interface_mac(m.interface, aux);
 				memcpy(eth_hdr->ether_dhost, eth_hdr->ether_shost, 6);
@@ -181,12 +181,20 @@ int main(int argc, char *argv[])
 					struct iphdr *ip_hdr1 = (struct iphdr *) (firstPacket.payload + sizeof(struct ether_header)); 	
 					struct arp_entry *newMac = get_arp_entry(ip_hdr1->daddr);
 
+					
+
 					if (newMac == NULL) {
 						queue_enq(q2, &firstPacket);
 					} else {
+						ip_hdr1->ttl = ip_hdr1->ttl - 1;
+						ip_hdr1->check = 0;
+						ip_hdr1->check = ip_checksum(ip_hdr1, sizeof(struct iphdr));
+						
 						struct ether_header *eth_hdr1 = (struct ether_header *) firstPacket.payload;
-						memcpy(eth_hdr1->ether_dhost, newMac, 6);
-						send_packet(m.interface, &firstPacket);
+
+						memcpy(eth_hdr1->ether_dhost, newMac->mac, 6);
+
+						send_packet(firstPacket.interface, &firstPacket);
 					}
 
 				}
@@ -194,7 +202,8 @@ int main(int argc, char *argv[])
 				q = q2;
 			}
 			
-		} else if (eth_hdr->ether_type == ipv4) {
+		} else
+		 if (eth_hdr->ether_type == ipv4) {
 			struct route_table_entry *route = get_best_route(ip_hdr->daddr);
 
       		uint16_t currSum = ip_hdr->check;
@@ -224,9 +233,8 @@ int main(int argc, char *argv[])
 				char *routerIpString = get_interface_ip(m.interface);
 				inet_aton(routerIpString, &routerIp);
 				if (icmp_hdr->type == ICMP_ECHO && routerIp.s_addr == ip_hdr->daddr) {
-				send_icmp(ip_hdr->saddr, ip_hdr->daddr, eth_hdr->ether_dhost, eth_hdr->ether_shost, 0, 0, m.interface, htons(getpid()), 0);
-
-				continue;
+					send_icmp(ip_hdr->saddr, ip_hdr->daddr, eth_hdr->ether_dhost, eth_hdr->ether_shost, 0, 0, m.interface, htons(getpid()), 0);
+					continue;
 				}
 			}
 
@@ -238,19 +246,30 @@ int main(int argc, char *argv[])
 				
 
 				p->interface = route->interface;
-				queue_enq(q, p);
+				queue_enq(q, &p);
 				arp_request(route); // TODO
+
+				// uint8_t *aux = malloc(6*sizeof(uint8_t));
+				// get_interface_mac(m.interface, aux);
+				// memcpy(eth_hdr->ether_shost, aux, 6);
+				// memset(eth_hdr->ether_dhost, 0xff, 6);
+				// eth_hdr->ether_type = htons(ETHERTYPE_ARP);
+
+				// send_arp(route->next_hop, htonl(ipToInt(get_interface_ip(m.interface))), eth_hdr, route->interface, htons(1));
+
 			} else {
 				// ARP entry found, update header and forward
 				ip_hdr->ttl = ip_hdr->ttl - 1;
 				ip_hdr->check = 0;
 				ip_hdr->check = ip_checksum(ip_hdr, sizeof(struct iphdr));
 
-				
-				// memcpy(eth_hdr->ether_dhost, &arp->mac, 6);
-				for(int i = 0; i < 6; ++i) {
-					eth_hdr->ether_dhost[i] = arp->mac[i];
-				}
+				// // memcpy(eth_hdr->ether_dhost, &arp->mac, 6);
+				// for(int i = 0; i < 6; ++i) {
+				// 	eth_hdr->ether_dhost[i] = arp->mac[i];
+				// }
+				memcpy(eth_hdr->ether_dhost, &arp->mac, 6);
+	
+
 				send_packet(route->interface, &m);
 				continue;
 			}
