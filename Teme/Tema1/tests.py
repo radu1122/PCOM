@@ -209,7 +209,9 @@ def router_arp_reply_a(testname):
     """Test the router responds to an ARP request"""
     hs = TESTS[testname].host_s
     r_ip = info.get("router_ip", hs)
-    return [Ether(dst=ETHER_BROADCAST) / ARP(pdst=r_ip)]
+    s_mac = info.get("host_mac", hs)
+    s_ip = info.get("host_ip", hs)
+    return [Ether(src=s_mac, dst=ETHER_BROADCAST) / ARP(psrc=s_ip, pdst=r_ip)]
 
 
 def router_arp_request_p(testname, packets):
@@ -240,8 +242,10 @@ def router_arp_request_a(testname):
 
     r_mac = info.get("router_mac", hs, router)
     target_ip = info.get("host_ip", hr)
+    s_mac = info.get("host_mac", hs)
+    s_ip = info.get("host_ip", hs)
 
-    return [Ether(dst=r_mac) / IP(dst=target_ip)]
+    return [Ether(src=s_mac, dst=r_mac) / IP(src=s_ip, dst=target_ip)]
 
 
 def forward_p(testname, packets):
@@ -322,9 +326,11 @@ def forward_a(testname):
     hr = TESTS[testname].host_r
     router = TESTS[testname].router
     r_mac = info.get("router_mac", hs, router)
+    s_mac = info.get("host_mac", hs)
+    s_ip = info.get("host_ip", hs)
     target_ip = info.get("host_ip", hr)
 
-    return [Ether(dst=r_mac) / IP(dst=target_ip)]
+    return [Ether(src=s_mac, dst=r_mac) / IP(src=s_ip, dst=target_ip)]
 
 
 def forward_no_arp_a(testname):
@@ -334,8 +340,10 @@ def forward_no_arp_a(testname):
     router = TESTS[testname].router
     r_mac = info.get("router_mac", hs, router)
     target_ip = info.get("host_ip", hr)
+    s_mac = info.get("host_mac", hs)
+    s_ip = info.get("host_ip", hs)
 
-    packet = Ether(dst=r_mac) / IP(dst=target_ip)
+    packet = Ether(src=s_mac, dst=r_mac) / IP(src=s_ip, dst=target_ip)
     return [packet, packet]
 
 
@@ -345,13 +353,15 @@ def wrong_checksum_a(testname):
     router = TESTS[testname].router
     r_mac = info.get("router_mac", hs, router)
     target_ip = info.get("host_ip", hr)
+    s_mac = info.get("host_mac", hs)
+    s_ip = info.get("host_ip", hs)
 
-    i = IP(dst=target_ip)
+    i = IP(src=s_ip, dst=target_ip)
     chk = checksum(bytes(i))
     chk = (chk + 1) % (2 ** 16)
     i.chksum = chk
 
-    return Ether(dst=r_mac) / i
+    return Ether(src=s_mac, dst=r_mac) / i
 
 
 def icmp_timeout_p(testname, packets):
@@ -382,9 +392,14 @@ def icmp_timeout_p(testname, packets):
 
 def icmp_timeout_a(testname):
     hr = TESTS[testname].host_r
+    hs = TESTS[testname].host_s
+    router = TESTS[testname].router
     target_ip = info.get("host_ip", hr)
+    s_mac = info.get("host_mac", hs)
+    s_ip = info.get("host_ip", hs)
+    r_mac = info.get("router_mac", hs, router)
 
-    return [Ether() / IP(dst=target_ip, ttl=1)]
+    return [Ether(src=s_mac, dst=r_mac) / IP(src=s_ip, dst=target_ip, ttl=1)]
 
 
 def host_unreachable_p(testname, packets):
@@ -415,8 +430,13 @@ def host_unreachable_p(testname, packets):
 
 def host_unreachable_a(testname):
     target_ip = "10.0.0.1"
+    hs = TESTS[testname].host_s
+    router = TESTS[testname].router
+    s_mac = info.get("host_mac", hs)
+    s_ip = info.get("host_ip", hs)
+    r_mac = info.get("router_mac", hs, router)
 
-    return [Ether() / IP(dst=target_ip)]
+    return [Ether(src=s_mac, dst=r_mac) / IP(src=s_ip, dst=target_ip)]
 
 
 def router_icmp_p(testname, packets):
@@ -450,7 +470,9 @@ def router_icmp_a(testname):
     router = TESTS[testname].router
     r_mac = info.get("router_mac", router, hs)
     r_ip = info.get("router_ip", hs)
-    return [Ether(dst=r_mac) / IP(dst=r_ip) / ICMP()]
+    s_mac = info.get("host_mac", hs)
+    s_ip = info.get("host_ip", hs)
+    return [Ether(src=s_mac, dst=r_mac) / IP(src=s_ip, dst=r_ip) / ICMP()]
 
 
 def forward10packets_p(testname, packets):
@@ -476,7 +498,10 @@ def forward10packets_a(testname):
     router = TESTS[testname].router
     r_mac = info.get("router_mac", router, hs)
     target_ip = info.get("host_ip", hr)
-    return [Ether(dst=r_mac) / IP(dst=target_ip) / ICMP()] * 10
+    s_mac = info.get("host_mac", hs)
+    s_ip = info.get("host_ip", hs)
+    return [Ether(src=s_mac, dst=r_mac) / IP(src=s_ip, dst=target_ip)
+            / ICMP()] * 10
 
 
 Test = namedtuple("Test", ["host_s", "host_r", "router", "active_fn", "passive_fn"])
@@ -504,4 +529,4 @@ TESTS = OrderedDict([
         ("host_unreachable", Test(0, 0, 0, host_unreachable_a, host_unreachable_p)),
         ("forward10packets", Test(0, 1, 0, forward10packets_a, forward10packets_p)),
         ("forward10across", Test(0, 3, 0, forward10packets_a, forward10packets_p)),
-])
+        ])

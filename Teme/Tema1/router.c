@@ -98,14 +98,12 @@ void arp_request(struct route_table_entry* best_route) {
 	
 
 
-	//completez ether header
 	uint8_t *aux = malloc(6*sizeof(uint8_t));
 	get_interface_mac(m.interface, aux);
 	memcpy(eth_hdr->ether_shost, aux, 6);
 	memset(eth_hdr->ether_dhost, 0xff, 6);
 	eth_hdr->ether_type = htons(ETHERTYPE_ARP);
 	
-	//completez header - ul de arp
 	arp_pkt->arp_hrd = htons(ARPHRD_ETHER);
 	arp_pkt->arp_pro = htons(ETHERTYPE_IP);
 	arp_pkt->arp_hln = 6;
@@ -140,7 +138,6 @@ int main(int argc, char *argv[])
 	arp_table = malloc(sizeof(struct  arp_entry) * 66000);
 	DIE(rtable == NULL, "memory err");
 	rtable_size = readRtable(rtable, argv[1]);
-	// parseArpTable();
     arp_table_len = 0;
 	while (1) {
 
@@ -223,6 +220,7 @@ int main(int argc, char *argv[])
 
 			if (route == NULL) {
 				send_icmp(ip_hdr->saddr, ip_hdr->daddr, eth_hdr->ether_dhost, eth_hdr->ether_shost, ICMP_DEST_UNREACH, ICMP_NET_UNREACH, m.interface, htons(getpid()), 0);
+
 				continue;
 			}
 
@@ -238,9 +236,9 @@ int main(int argc, char *argv[])
 				}
 			}
 
-			struct arp_entry *arp = get_arp_entry(ip_hdr->daddr);
+			struct arp_entry *arpX = get_arp_entry(ip_hdr->daddr);
 
-			if (arp == NULL) {
+			if (arpX == NULL) {
 				packet *p = calloc(sizeof(packet), 1);
 				memcpy(p, &m, sizeof(packet));
 				
@@ -253,22 +251,22 @@ int main(int argc, char *argv[])
 				// get_interface_mac(m.interface, aux);
 				// memcpy(eth_hdr->ether_shost, aux, 6);
 				// memset(eth_hdr->ether_dhost, 0xff, 6);
-				// eth_hdr->ether_type = htons(ETHERTYPE_ARP);
+				// eth_hdr->ether_type = htons(ETHERTYPE_ARPX);
 
-				// send_arp(route->next_hop, htonl(ipToInt(get_interface_ip(m.interface))), eth_hdr, route->interface, htons(1));
+				// send_arpX(route->next_hop, htonl(ipToInt(get_interface_ip(m.interface))), eth_hdr, route->interface, htons(1));
 
 			} else {
-				// ARP entry found, update header and forward
+				// ARPX entry found, update header and forward
 				ip_hdr->ttl = ip_hdr->ttl - 1;
 				ip_hdr->check = 0;
 				ip_hdr->check = ip_checksum(ip_hdr, sizeof(struct iphdr));
 
-				// // memcpy(eth_hdr->ether_dhost, &arp->mac, 6);
+				// // memcpy(eth_hdr->ether_dhost, &arpX->mac, 6);
 				// for(int i = 0; i < 6; ++i) {
-				// 	eth_hdr->ether_dhost[i] = arp->mac[i];
+				// 	eth_hdr->ether_dhost[i] = arpX->mac[i];
 				// }
-				memcpy(eth_hdr->ether_dhost, &arp->mac, 6);
-	
+				memcpy(eth_hdr->ether_dhost, &arpX->mac, 6);
+
 
 				send_packet(route->interface, &m);
 				continue;

@@ -47,18 +47,6 @@ typedef struct {
 	int interface;
 } packet;
 
-struct arp_entry {
-	__u32 ip;
-	uint8_t mac[6];
-};
-
-struct route_table_entry {
-	uint32_t prefix;
-	uint32_t next_hop;
-	uint32_t mask;
-	int interface;
-} __attribute__((packed));
-
 /* Ethernet ARP packet from RFC 826 */
 struct arp_header {
 	uint16_t htype;   /* Format of hardware address */
@@ -71,6 +59,18 @@ struct arp_header {
 	uint8_t tha[ETH_ALEN];  /* Target hardware address */
 	uint32_t tpa;   /* Target IP address */
 } __attribute__((packed)); 
+
+struct arp_entry {
+	__u32 ip;
+	uint8_t mac[6];
+};
+
+struct route_table_entry {
+	uint32_t prefix;
+	uint32_t next_hop;
+	uint32_t mask;
+	int interface;
+} __attribute__((packed));
 
 extern int interfaces[ROUTER_NUM_INTERFACES];
 
@@ -135,6 +135,21 @@ void parse_arp_table();
  */
 void send_icmp(uint32_t daddr, uint32_t saddr, uint8_t *sha, uint8_t *dha, u_int8_t type, u_int8_t code, int interface, int id, int seq);
 
+
+/**
+ * @brief 
+ * 
+ * @param daddr destination IP
+ * @param saddr source IP
+ * @param sha source MAC
+ * @param dha destination MAC
+ * @param type Type
+ * @param code Code
+ * @param interface interface 
+ */
+void send_icmp_error(uint32_t daddr, uint32_t saddr, uint8_t *sha, uint8_t *dha, u_int8_t type, u_int8_t code, int interface);
+
+
 /**
  * @brief 
  * 
@@ -145,7 +160,6 @@ void send_icmp(uint32_t daddr, uint32_t saddr, uint8_t *sha, uint8_t *dha, u_int
  * @param arp_op ARP OP: ARPOP_REQUEST or ARPOP_REPLY
  */
 void send_arp(uint32_t daddr, uint32_t saddr, struct ether_header *eth_hdr, int interface, uint16_t arp_op);
-
 /**
  * @brief 
  * 

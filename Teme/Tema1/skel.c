@@ -223,8 +223,7 @@ void build_ethhdr(struct ether_header *eth_hdr, uint8_t *sha, uint8_t *dha, unsi
 	eth_hdr->ether_type = type;
 }
 
-void send_icmp(uint32_t daddr, uint32_t saddr, uint8_t *sha,
-uint8_t *dha, u_int8_t type, u_int8_t code, int interface, int id, int seq)
+void send_icmp(uint32_t daddr, uint32_t saddr, uint8_t *sha, uint8_t *dha, u_int8_t type, u_int8_t code, int interface, int id, int seq)
 {
 
 	struct ether_header eth_hdr;
@@ -237,6 +236,47 @@ uint8_t *dha, u_int8_t type, u_int8_t code, int interface, int id, int seq)
 			.id = id,
 			.sequence = seq,
 		}
+	};
+	packet packet;
+	void *payload;
+
+	build_ethhdr(&eth_hdr, sha, dha, htons(ETHERTYPE_IP));
+	/* No options */
+	ip_hdr.version = 4;
+	ip_hdr.ihl = 5;
+	ip_hdr.tos = 0;
+	ip_hdr.protocol = IPPROTO_ICMP;
+	ip_hdr.tot_len = htons(sizeof(struct iphdr) + sizeof(struct icmphdr));
+	ip_hdr.id = htons(1);
+	ip_hdr.frag_off = 0;
+	ip_hdr.ttl = 64;
+	ip_hdr.check = 0;
+	ip_hdr.daddr = daddr;
+	ip_hdr.saddr = saddr;
+	ip_hdr.check = ip_checksum(&ip_hdr, sizeof(struct iphdr));
+	
+	icmp_hdr.checksum = icmp_checksum((uint16_t *)&icmp_hdr, sizeof(struct icmphdr));
+
+	payload = packet.payload;
+	memcpy(payload, &eth_hdr, sizeof(struct ether_header));
+	payload += sizeof(struct ether_header);
+	memcpy(payload, &ip_hdr, sizeof(struct iphdr));
+	payload += sizeof(struct iphdr);
+	memcpy(payload, &icmp_hdr, sizeof(struct icmphdr));
+	packet.len = sizeof(struct ether_header) + sizeof(struct iphdr) + sizeof(struct icmphdr);
+
+	send_packet(interface, &packet);
+}
+
+void send_icmp_error(uint32_t daddr, uint32_t saddr, uint8_t *sha, uint8_t *dha, u_int8_t type, u_int8_t code, int interface)
+{
+
+	struct ether_header eth_hdr;
+	struct iphdr ip_hdr;
+	struct icmphdr icmp_hdr = {
+		.type = type,
+		.code = code,
+		.checksum = 0,
 	};
 	packet packet;
 	void *payload;

@@ -2,6 +2,8 @@
     "files.associations": {
         "skel.h": "c",
         "ip_icmp.h": "c",
-        "if_arp.h": "c"
+        "if_arp.h": "c",
+        "if_ether.h": "c",
+        "queue.h": "c"
     }
 }
