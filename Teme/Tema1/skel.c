@@ -76,8 +76,9 @@ char *get_interface_ip(int interface)
 	if (interface == 0)
 		sprintf(ifr.ifr_name, "rr-0-1");
 	else {
-		sprintf(ifr.ifr_name, "r-%u", interface - 1);	ioctl(interfaces[interface], SIOCGIFADDR, &ifr);
+		sprintf(ifr.ifr_name, "r-%u", interface - 1);
 	}
+	ioctl(interfaces[interface], SIOCGIFADDR, &ifr);
 	return inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr);
 }
 
@@ -87,8 +88,9 @@ void get_interface_mac(int interface, uint8_t *mac)
 	if (interface == 0)
 		sprintf(ifr.ifr_name, "rr-0-1");
 	else {
-		sprintf(ifr.ifr_name, "r-%u", interface - 1);	ioctl(interfaces[interface], SIOCGIFHWADDR, &ifr);
+		sprintf(ifr.ifr_name, "r-%u", interface - 1);
 	}
+	ioctl(interfaces[interface], SIOCGIFHWADDR, &ifr);
 	memcpy(mac, ifr.ifr_addr.sa_data, 6);
 }
 

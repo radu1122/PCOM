@@ -60,18 +60,6 @@ struct arp_header {
 	uint32_t tpa;   /* Target IP address */
 } __attribute__((packed)); 
 
-struct arp_entry {
-	__u32 ip;
-	uint8_t mac[6];
-};
-
-struct route_table_entry {
-	uint32_t prefix;
-	uint32_t next_hop;
-	uint32_t mask;
-	int interface;
-} __attribute__((packed));
-
 extern int interfaces[ROUTER_NUM_INTERFACES];
 
 /**

@@ -2,6 +2,18 @@
 #include "skel.h"
 #include <netinet/if_ether.h>
 
+struct arp_entry {
+	__u32 ip;
+	uint8_t mac[6];
+};
+
+struct route_table_entry {
+	uint32_t prefix;
+	uint32_t next_hop;
+	uint32_t mask;
+	int interface;
+} __attribute__((packed));
+
 int interfaces[ROUTER_NUM_INTERFACES];
 struct route_table_entry *rtable;
 int rtable_size;
@@ -130,6 +142,8 @@ void arp_request(struct route_table_entry* best_route) {
 int main(int argc, char *argv[])
 {
 	packet m;
+	printf("start main");
+
 	int rc;
 	queue q = queue_create();
 	init(argc - 2, argv + 2);
@@ -139,8 +153,11 @@ int main(int argc, char *argv[])
 	DIE(rtable == NULL, "memory err");
 	rtable_size = readRtable(rtable, argv[1]);
     arp_table_len = 0;
+		printf("start while \n");
+
 	while (1) {
 
+		printf("in while \n");
 
 		rc = get_packet(&m);
 		DIE(rc < 0, "get_message");
@@ -153,50 +170,57 @@ int main(int argc, char *argv[])
 		uint16_t ipv4 = htons(0x800);
 
 		if (eth_hdr->ether_type == arp) { // ARP
-			
-			if (arp_hdr->op == htons(1)) { // ARP request
+			if (arp_hdr->op == htons(ARPOP_REQUEST)) { // ARP request
 				uint8_t *aux = malloc(6*sizeof(uint8_t));
 				get_interface_mac(m.interface, aux);
 				memcpy(eth_hdr->ether_dhost, eth_hdr->ether_shost, 6);
 				memcpy(eth_hdr->ether_shost, aux, 6);
 				eth_hdr->ether_type = htons(ETHERTYPE_ARP);
 
-				send_arp(arp_hdr->spa, htonl(ipToInt(get_interface_ip(m.interface))), eth_hdr, m.interface, htons(2));
+				send_arp(arp_hdr->spa, htonl(ipToInt(get_interface_ip(m.interface))), eth_hdr, m.interface, htons(ARPOP_REPLY));
 				
 			} else { // ARP reply
+
 				struct arp_entry newArp;
-				memcpy(&newArp.ip, &(arp_hdr->spa), 4);
+				newArp.ip = arp_hdr->spa;
 				memcpy(newArp.mac, arp_hdr->sha, 6);
 
 				arp_table_len++;	
 				arp_table[arp_table_len - 1] = newArp;
 					
 				queue q2 = queue_create();
+				while(!queue_empty(q)) { // verifica toata pachetele din coada
+					printf("intra in while q empty");
+					packet * firstPacket = (packet *) queue_deq(q);
+					struct iphdr *ip_hdr1 = (struct iphdr *) (firstPacket->payload + sizeof(struct ether_header)); 	
+					// struct arp_entry *newArp = get_arp_entry(ip_hdr1->daddr);
 
-				while(queue_empty(q) != 1) { // verifica toata pachetele din coada
-					packet firstPacket = * (packet *) queue_deq(q);
-					struct iphdr *ip_hdr1 = (struct iphdr *) (firstPacket.payload + sizeof(struct ether_header)); 	
-					struct arp_entry *newMac = get_arp_entry(ip_hdr1->daddr);
+					struct route_table_entry *bestRoute = get_best_route(ip_hdr1->daddr);
 
-					
-
-					if (newMac == NULL) {
-						queue_enq(q2, &firstPacket);
+					if (bestRoute->next_hop != arp_hdr->spa) {
+						queue_enq(q2, firstPacket);
 					} else {
 						ip_hdr1->ttl = ip_hdr1->ttl - 1;
 						ip_hdr1->check = 0;
 						ip_hdr1->check = ip_checksum(ip_hdr1, sizeof(struct iphdr));
 						
-						struct ether_header *eth_hdr1 = (struct ether_header *) firstPacket.payload;
+						struct ether_header *eth_hdr1 = (struct ether_header *) firstPacket->payload;
 
-						memcpy(eth_hdr1->ether_dhost, newMac->mac, 6);
+						memcpy(eth_hdr1->ether_dhost, arp_hdr->sha, 6);
 
-						send_packet(firstPacket.interface, &firstPacket);
+
+						get_interface_mac(bestRoute->interface, eth_hdr1->ether_shost);
+						printf("trimite pachet din coada \n");
+						send_packet(bestRoute->interface, firstPacket);
 					}
 
 				}
 
-				q = q2;
+				// q = q2;
+				while (queue_empty(q2) != 1) {
+					packet firstPacket = * (packet *) queue_deq(q2);
+					queue_enq(q, &firstPacket);
+				}
 			}
 			
 		} else
@@ -211,15 +235,16 @@ int main(int argc, char *argv[])
 				continue;
 			};
 
-			if (ip_hdr->ttl < 1) {
-				continue;
-			} else if (ip_hdr->ttl == 1) {
-				send_icmp(ip_hdr->saddr, ip_hdr->daddr, eth_hdr->ether_dhost, eth_hdr->ether_shost, ICMP_TIME_EXCEEDED, ICMP_NET_UNREACH, m.interface, htons(getpid()), 0);
+			// if (ip_hdr->ttl < 1) {
+			// 	continue;
+			// } else 
+			if (ip_hdr->ttl <= 1) {
+				send_icmp_error(ip_hdr->saddr, ip_hdr->daddr, eth_hdr->ether_dhost, eth_hdr->ether_shost, ICMP_TIME_EXCEEDED, ICMP_NET_UNREACH, m.interface);
 				continue;
 			}
 
 			if (route == NULL) {
-				send_icmp(ip_hdr->saddr, ip_hdr->daddr, eth_hdr->ether_dhost, eth_hdr->ether_shost, ICMP_DEST_UNREACH, ICMP_NET_UNREACH, m.interface, htons(getpid()), 0);
+				send_icmp_error(ip_hdr->saddr, ip_hdr->daddr, eth_hdr->ether_dhost, eth_hdr->ether_shost, ICMP_DEST_UNREACH, ICMP_NET_UNREACH, m.interface);
 
 				continue;
 			}
@@ -239,21 +264,34 @@ int main(int argc, char *argv[])
 			struct arp_entry *arpX = get_arp_entry(ip_hdr->daddr);
 
 			if (arpX == NULL) {
-				packet *p = calloc(sizeof(packet), 1);
-				memcpy(p, &m, sizeof(packet));
+				// packet *p = calloc(sizeof(packet), 1);
+				// memcpy(p, &m, sizeof(packet));
 				
 
-				p->interface = route->interface;
-				queue_enq(q, &p);
-				arp_request(route); // TODO
+				// p->interface = route->interface;
+				packet * buff = malloc(sizeof(m));
+				memcpy(buff, &m, sizeof(m));
+				queue_enq(q, buff);
 
-				// uint8_t *aux = malloc(6*sizeof(uint8_t));
-				// get_interface_mac(m.interface, aux);
-				// memcpy(eth_hdr->ether_shost, aux, 6);
-				// memset(eth_hdr->ether_dhost, 0xff, 6);
-				// eth_hdr->ether_type = htons(ETHERTYPE_ARPX);
+				// arp_request(route); // TODO
 
-				// send_arpX(route->next_hop, htonl(ipToInt(get_interface_ip(m.interface))), eth_hdr, route->interface, htons(1));
+				uint8_t *aux = malloc(6*sizeof(uint8_t));
+				get_interface_mac(route->interface, aux);
+				memcpy(eth_hdr->ether_shost, aux, 6);
+				memset(eth_hdr->ether_dhost, 0xff, 6);
+				eth_hdr->ether_type = 1544;
+
+				struct in_addr x;
+
+
+				inet_aton(get_interface_ip(route->interface), &x);
+
+				printf("%s\n", inet_ntoa(x));
+
+				printf("%d\n", route->interface);
+
+
+				send_arp(route->next_hop, x.s_addr, eth_hdr, route->interface, htons(ARPOP_REQUEST));
 
 			} else {
 				// ARPX entry found, update header and forward

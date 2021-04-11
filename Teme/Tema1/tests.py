@@ -15,8 +15,12 @@ def error(msg, *args):
 
 
 def dump_packets(packets):
+    print("###################################")
+    print("All packets:\n")
     for p in packets:
         error("Packet\n{}".format(p.show(dump=True)))
+
+    print("###################################")
 
 
 def check_nothing(testname, packets):
@@ -171,35 +175,49 @@ def sender_default(testname, packets):
 def router_arp_reply_p(testname, packets):
     hr = TESTS[testname].host_r
     router = TESTS[testname].router
+    origpackets = packets.copy()
     if len(packets) < 2:
         error("No reply received")
+        dump_packets(origpackets)
         return False
 
-    assert Ether in packets[1], "Packet not of Ethernet type"
+    if Ether not in packets[1]:
+        error("Packet not of Ethernet type")
+        dump_packets(origpackets)
+        return False
+
     e = packets[1][Ether]
     if e.src != info.get("router_mac", hr, router):
         error("Wrong source address")
         error("Expected: {}".format(info.get("router_mac", hr, router)))
         error("Got: {}".format(e.src))
+        dump_packets(origpackets)
         return False
 
     if e.dst != info.get("host_mac", hr):
         error("Wrong destination address")
         error("Expected: {}".format(info.get("host_mac", hr)))
         error("Got: {}".format(e.dst))
+        dump_packets(origpackets)
         return False
 
-    assert ARP in packets[0], "Packet not of ARP type"
+    if ARP not in packets[0]:
+        error("Packet not of ARP type")
+        dump_packets(origpackets)
+        return False
+
     a = packets[1][ARP]
 
     if a.get_field("op").i2repr(a, a.op) != "is-at":
         error("Wrong ARP type")
+        dump_packets(origpackets)
         return False
 
     if a[ARP].hwdst != info.get("host_mac", hr):
         error("Wrong destination in ARP reply")
         error("Expected: {}".format(info.get("host_mac", hr)))
         error("Got: {}".format(a[ARP].hwdst))
+        dump_packets(origpackets)
         return False
 
     return True
@@ -218,8 +236,12 @@ def router_arp_request_p(testname, packets):
     # at this point we're not interested in whether the router actually
     # delivered the packet, just the arp request.
     hr = TESTS[testname].host_r
+    origpackets = packets.copy()
 
-    assert len(packets) >= 1, "No packet received!"
+    if len(packets) < 1:
+        error("No packet received!")
+        dump_packets(origpackets)
+        return False
 
     assert ARP in packets[0], "No ARP request!"
     a = packets[0][ARP]
@@ -230,6 +252,7 @@ def router_arp_request_p(testname, packets):
         error("Wrong ARP address request")
         error("Expected {}".format(info.get("host_ip", hr)))
         error("Got {}".format(a.pdst))
+        dump_packets(origpackets)
         return False
 
     return True
@@ -254,12 +277,14 @@ def forward_p(testname, packets):
     hs = TESTS[testname].host_s
     hr = TESTS[testname].host_r
     router = TESTS[testname].router
+    origpackets = packets.copy()
 
     res, packets = cull_dull_packets(hr, router, packets)
     icmp_ur, packets = cull_icmp_unreachable(hr, packets)
 
     if not len(packets):
         error("No packet received")
+        dump_packets(origpackets)
         return False
 
     nr_pkts = 2 if testname == "forward_no_arp" else 1
@@ -268,7 +293,7 @@ def forward_p(testname, packets):
 
     if not res or len(packets) > nr_pkts:
         error("Excess packets:")
-        dump_packets(packets)
+        dump_packets(origpackets)
 
         return False
 
@@ -278,7 +303,11 @@ def forward_p(testname, packets):
             ipPresent = True
             break
 
-    assert ipPresent, "no IP packet from router"
+    if not ipPresent:
+        error("No IP packet from router")
+        dump_packets(origpackets)
+        return False
+
     i = p[IP]
     result = True
 
@@ -318,6 +347,9 @@ def forward_p(testname, packets):
         error("Got: destination={}".format(i.src))
 
     result = result and crt
+    if not result:
+        dump_packets(origpackets)
+
     return result
 
 
@@ -367,24 +399,30 @@ def wrong_checksum_a(testname):
 def icmp_timeout_p(testname, packets):
     hr = TESTS[testname].host_r
     router = TESTS[testname].router
+    origpackets = packets.copy()
     res, packets = cull_dull_packets(hr, router, packets)
 
     if not len(packets):
         error("No packet received")
+        dump_packets(origpackets)
         return False
 
     if not res or len(packets) > 2:
         error("Excess packets:")
-        dump_packets(packets)
-
+        dump_packets(origpackets)
         return False
 
-    assert ICMP in packets[1], "no ICMP packet from router"
+    if ICMP not in packets[1]:
+        error("No ICMP packet from router")
+        dump_packets(origpackets)
+        return False
+
     i = packets[1][ICMP]
     if not (i.type == 11 and i.code == 0):
         error("Wrong ICMP type and/or code")
         error("Expected type=11, code=0")
         error("Got type={}, code={}".format(i.type, i.code))
+        dump_packets(origpackets)
         return False
 
     return True
@@ -405,24 +443,30 @@ def icmp_timeout_a(testname):
 def host_unreachable_p(testname, packets):
     hr = TESTS[testname].host_r
     router = TESTS[testname].router
+    origpackets = packets.copy()
     res, packets = cull_dull_packets(hr, router, packets)
 
     if not len(packets):
         error("No packet received")
+        dump_packets(origpackets)
         return False
 
     if not res or len(packets) > 2:
         error("Excess packets:")
-        dump_packets(packets)
-
+        dump_packets(origpackets)
         return False
 
-    assert ICMP in packets[1], "no ICMP packet from router"
+    if ICMP not in packets[1]:
+        error("No ICMP packet from router")
+        dump_packets(origpackets)
+        return False
+
     i = packets[1][ICMP]
     if not (i.type == 3 and i.code == 0):
         error("Wrong ICMP type and/or code")
         error("Expected type=3, code=0")
         error("Got type={}, code={}".format(i.type, i.code))
+        dump_packets(origpackets)
         return False
 
     return True
@@ -442,24 +486,31 @@ def host_unreachable_a(testname):
 def router_icmp_p(testname, packets):
     hr = TESTS[testname].host_r
     router = TESTS[testname].router
+    origpackets = packets.copy()
     res, packets = cull_dull_packets(hr, router, packets)
 
     if len(packets) < 2:
         error("No packet received")
+        dump_packets(origpackets)
         return False
 
     if not res or len(packets) > 2:
         error("Excess packets:")
-        dump_packets(packets)
+        dump_packets(origpackets)
 
         return False
 
-    assert ICMP in packets[1], "no ICMP packet from router"
+    if ICMP not in packets[1]:
+        error("No ICMP packet from router")
+        dump_packets(origpackets)
+        return False
+
     i = packets[1][ICMP]
     if not (i.type == 0 and i.code == 0):
         error("Wrong ICMP type and/or code")
         error("Expected type=0, code=0")
         error("Got type={}, code={}".format(i.type, i.code))
+        dump_packets(origpackets)
         return False
 
     return True
@@ -478,15 +529,18 @@ def router_icmp_a(testname):
 def forward10packets_p(testname, packets):
     hr = TESTS[testname].host_r
     router = TESTS[testname].router
+    origpackets = packets.copy()
     res, packets = cull_dull_packets(hr, router, packets)
     if not res:
         error("Excess packets")
+        dump_packets(origpackets)
         return False
 
     if len(packets) < 20 or len(packets) > 22:  # for the final test, allow arp
         error("Wrong number of packets!")
         error("Expected: 20")
         error("Got: {}".format(len(packets)))
+        dump_packets(origpackets)
         return False
 
     return True

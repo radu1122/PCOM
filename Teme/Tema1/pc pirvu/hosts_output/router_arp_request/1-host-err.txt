@@ -1,4 +1,0 @@
-  File "./checker.py", line 38, in passive
-    status = fn(testname, packets)
-  File "/home/radu/Facultate/PCOM/Teme/Tema1/pc pirvu/tests.py", line 220, in router_arp_request_p
-    assert len(packets) >= 1, "No packet received!"
