@@ -54,21 +54,30 @@ int readRtable(struct route_table_entry *rtable, char fileName[100]){
 }
 
 struct route_table_entry *get_best_route(__u32 dest_ip) {
-	int id = -1;
-	int maskMax = 0;
-	for (int i = 0; i < rtable_size; i++) {
-		if ((dest_ip & rtable[i].mask) == rtable[i].prefix && rtable[i].prefix > maskMax) {
-			id = i;
-			maskMax = rtable[i].prefix;
-		}
-	}
-	if (id == -1) {
+    int left = 0;
+    int right = rtable_size - 1;
+    int mid = 0;
+	int finalId = -1;
+    
+    while( left <= right )
+    {
+        mid = (left + right) / 2;
+        
+		if ((dest_ip & rtable[mid].mask) == rtable[mid].prefix) {
+			finalId = mid;
+			break;
+		} else if ((dest_ip & rtable[mid].mask) > rtable[mid].prefix) {
+            right = mid - 1;
+        } else if ((dest_ip & rtable[mid].mask) < rtable[mid].prefix) {
+            left = mid + 1;
+        }
+    
+    }
+	if (finalId == -1) {
 		return NULL;
 	}
-	return &rtable[id];
+	return &rtable[finalId];
 }
-
-
 
 struct arp_entry *get_arp_entry(__u32 ip) {
     for (int i = 0; i < arp_table_len; i++) {
@@ -79,70 +88,16 @@ struct arp_entry *get_arp_entry(__u32 ip) {
 	return NULL;
 }
 
-void parseArpTable() 
-{
-	FILE *f;
-	fprintf(stderr, "Parsing ARP table\n");
-	f = fopen("arp_table.txt", "r");
-	DIE(f == NULL, "Failed to open arp_table.txt");
-	char line[100];
-	int i = 0;
-	for(i = 0; fgets(line, sizeof(line), f); i++) {
-		char ip_str[50], mac_str[50];
-		sscanf(line, "%s %s", ip_str, mac_str);
-		fprintf(stderr, "IP: %s MAC: %s\n", ip_str, mac_str);
-		arp_table[i].ip = inet_addr(ip_str);
-		int rc = hwaddr_aton(mac_str, arp_table[i].mac);
-		DIE(rc < 0, "invalid MAC");
-	}
-	arp_table_len = i;
-	fclose(f);
-	fprintf(stderr, "Done parsing ARP table.\n");
+int comparator(const void *o1, const void *o2) {
+    int o1Prefix = ((struct route_table_entry *)o1)->prefix;
+    int o2Prefix = ((struct route_table_entry *)o2)->prefix; 
+
+    return o2Prefix - o1Prefix; 
 }
-
-
-void arp_request(struct route_table_entry* best_route) {
-	
-	packet m;
-
-	struct ether_header * eth_hdr = (struct ether_header *)m.payload;
-	struct ether_arp *arp_pkt = (struct ether_arp *)(m.payload + sizeof(struct ether_header)); 
-	
-
-
-	uint8_t *aux = malloc(6*sizeof(uint8_t));
-	get_interface_mac(m.interface, aux);
-	memcpy(eth_hdr->ether_shost, aux, 6);
-	memset(eth_hdr->ether_dhost, 0xff, 6);
-	eth_hdr->ether_type = htons(ETHERTYPE_ARP);
-	
-	arp_pkt->arp_hrd = htons(ARPHRD_ETHER);
-	arp_pkt->arp_pro = htons(ETHERTYPE_IP);
-	arp_pkt->arp_hln = 6;
-	arp_pkt->arp_pln = 4;
-	arp_pkt->arp_op = htons(1);
-
-	memcpy(arp_pkt->arp_sha, eth_hdr->ether_shost, 6);
-	memset(arp_pkt->arp_tha, 0, 6);
-
-	uint32_t aux_ip = best_route->next_hop;
-	memcpy(arp_pkt->arp_tpa, &aux_ip, 4);
-	
-	aux_ip = htonl(ipToInt(get_interface_ip(m.interface)));
-	memcpy(arp_pkt->arp_spa, &aux_ip, 4);
-
-	m.len = sizeof(struct ether_header) + sizeof(struct ether_arp);
-	m.interface = best_route->interface;
-	
-	send_packet(m.interface, &m);
-}
-
-
 
 int main(int argc, char *argv[])
 {
 	packet m;
-	printf("start main");
 
 	int rc;
 	queue q = queue_create();
@@ -152,16 +107,13 @@ int main(int argc, char *argv[])
 	arp_table = malloc(sizeof(struct  arp_entry) * 66000);
 	DIE(rtable == NULL, "memory err");
 	rtable_size = readRtable(rtable, argv[1]);
+	qsort((void*)rtable, rtable_size, sizeof(struct route_table_entry), comparator);
     arp_table_len = 0;
-		printf("start while \n");
 
 	while (1) {
 
-		printf("in while \n");
-
 		rc = get_packet(&m);
 		DIE(rc < 0, "get_message");
-		/* Students will write code here */
 		struct ether_header *eth_hdr = (struct ether_header *) m.payload;
 		struct iphdr *ip_hdr = (struct iphdr *) (m.payload + sizeof(struct ether_header));
 		struct arp_header *arp_hdr = parse_arp(m.payload);
@@ -190,10 +142,8 @@ int main(int argc, char *argv[])
 					
 				queue q2 = queue_create();
 				while(!queue_empty(q)) { // verifica toata pachetele din coada
-					printf("intra in while q empty");
 					packet * firstPacket = (packet *) queue_deq(q);
 					struct iphdr *ip_hdr1 = (struct iphdr *) (firstPacket->payload + sizeof(struct ether_header)); 	
-					// struct arp_entry *newArp = get_arp_entry(ip_hdr1->daddr);
 
 					struct route_table_entry *bestRoute = get_best_route(ip_hdr1->daddr);
 
@@ -210,7 +160,6 @@ int main(int argc, char *argv[])
 
 
 						get_interface_mac(bestRoute->interface, eth_hdr1->ether_shost);
-						printf("trimite pachet din coada \n");
 						send_packet(bestRoute->interface, firstPacket);
 					}
 
@@ -231,25 +180,22 @@ int main(int argc, char *argv[])
 			ip_hdr->check = 0;
 			uint16_t newSum = ip_checksum(ip_hdr, sizeof(struct iphdr));
 
-			if (newSum != currSum) {
+			if (newSum != currSum) { // checksum err, drop packet
 				continue;
 			};
 
-			// if (ip_hdr->ttl < 1) {
-			// 	continue;
-			// } else 
-			if (ip_hdr->ttl <= 1) {
+			if (ip_hdr->ttl <= 1) { // drop packet tle
 				send_icmp_error(ip_hdr->saddr, ip_hdr->daddr, eth_hdr->ether_dhost, eth_hdr->ether_shost, ICMP_TIME_EXCEEDED, ICMP_NET_UNREACH, m.interface);
 				continue;
 			}
 
-			if (route == NULL) {
+			if (route == NULL) { // route unknown
 				send_icmp_error(ip_hdr->saddr, ip_hdr->daddr, eth_hdr->ether_dhost, eth_hdr->ether_shost, ICMP_DEST_UNREACH, ICMP_NET_UNREACH, m.interface);
 
 				continue;
 			}
 
-			if (ip_hdr->protocol == 1) {
+			if (ip_hdr->protocol == 1) { // echo packet
 				struct icmphdr *icmp_hdr = parse_icmp(m.payload);
 				struct in_addr routerIp;
 
@@ -263,17 +209,10 @@ int main(int argc, char *argv[])
 
 			struct arp_entry *arpX = get_arp_entry(ip_hdr->daddr);
 
-			if (arpX == NULL) {
-				// packet *p = calloc(sizeof(packet), 1);
-				// memcpy(p, &m, sizeof(packet));
-				
-
-				// p->interface = route->interface;
+			if (arpX == NULL) { // destination mac unknown
 				packet * buff = malloc(sizeof(m));
 				memcpy(buff, &m, sizeof(m));
 				queue_enq(q, buff);
-
-				// arp_request(route); // TODO
 
 				uint8_t *aux = malloc(6*sizeof(uint8_t));
 				get_interface_mac(route->interface, aux);
@@ -283,37 +222,20 @@ int main(int argc, char *argv[])
 
 				struct in_addr x;
 
-
 				inet_aton(get_interface_ip(route->interface), &x);
-
-				printf("%s\n", inet_ntoa(x));
-
-				printf("%d\n", route->interface);
-
 
 				send_arp(route->next_hop, x.s_addr, eth_hdr, route->interface, htons(ARPOP_REQUEST));
 
-			} else {
-				// ARPX entry found, update header and forward
+			} else { // forward packet
 				ip_hdr->ttl = ip_hdr->ttl - 1;
 				ip_hdr->check = 0;
 				ip_hdr->check = ip_checksum(ip_hdr, sizeof(struct iphdr));
 
-				// // memcpy(eth_hdr->ether_dhost, &arpX->mac, 6);
-				// for(int i = 0; i < 6; ++i) {
-				// 	eth_hdr->ether_dhost[i] = arpX->mac[i];
-				// }
 				memcpy(eth_hdr->ether_dhost, &arpX->mac, 6);
-
 
 				send_packet(route->interface, &m);
 				continue;
 			}
-
-			
-
 		}
-
-		
 	}
 }
