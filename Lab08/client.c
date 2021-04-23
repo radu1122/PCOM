@@ -20,8 +20,8 @@ int main(int argc, char *argv[])
 	int sockfd, n, ret;
 	struct sockaddr_in serv_addr;
 	char buffer[BUFLEN];
-	fd_set read_fds;	// multimea de citire folosita in select()
-	fd_set tmp_fds;		// multime folosita temporar
+	fd_set read_fds;
+	fd_set tmp_fds;
 	
 	if (argc < 3) {
 		usage(argv[0]);
