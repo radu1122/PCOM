@@ -1,0 +1,27 @@
+Copyright Radu-Andrei Dumitrescu 322CA 2021
+
+1. Parsare tabela de routare:
+    - am citit din fisier linie cu linie si am prelucrat stringul cu sscanf si am adaugat noul element in vectorul de structuri
+
+2. Implementare protocol ARP
+    - am verificat daca apchetul este de tip arp
+    - daca era, am avut 2 cazuri
+        - arp request
+            - trimit arp reply
+        - arp reply
+            - verific pachetele din coada si le trimit mai departe pe cele pentru care am gasit MAC
+            - pastrez in coada restul pachetelor pentru care inca nu este MACul cunoscut
+
+3. Procesul de dirijare si ICMP
+    - verificam daca pachetul este de tip 0x800 (IPv4)
+    - am verificat checksumul, daca nu este corect aruncam pachetul
+    - verificam conditia de TLE, daca era indeplinita trimiteam un ICMP error si aruncam pachetul
+    - verificam daca exista ip-ul destinatie in rtable, daca nu exista trimiteam un ICMP error si aruncam pachetul
+    - verificam daca protocolul este 1 si daca pachetul este pentru router
+        - daca da, atunci trimiteam un icmp echo
+    - daca MACul destinatie nu era cunoscut in tabela arp, atunci trimiteam un arp request si pastram pachetul in coada
+    - daca MAcul era cunoscut faceam update la ttl si la eth_hdr si trimiteam mai departe proiectul
+
+5. Implementare best route
+    - dupa parsarea lui rtable am ales sa fac o sortare crescatoare dupa prefix cu qsort
+    - functia efectiva care cauta in vector am implementat-o cu o cautare binara
