@@ -7,7 +7,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <utils.h>
+#include "utils.h"
 
 
 using namespace std;
@@ -51,12 +51,33 @@ int main(int argc, char *argv[]) {
     ret = send(sockTCP, buf, strlen(buf), 0);
     DIE(ret < 0, "send id failed");
 
-    while (true) {
+    FD_SET(sockTCP, &clientFd);
+    FD_SET(0, &clientFd);
+
+    while (1) {
         tmpFd = clientFd;
 
         ret = select(sockTCP + 1, &tmpFd, NULL, NULL, NULL);
         DIE(ret < 0, "sock select err");
     
+
+        if (FD_ISSET(sockTCP, &tmpFd)) {
+            memset(buf, 0, MAX_LEN);
+            ret = recv(sockTCP, buf, MAX_LEN, 0);
+            printf("input tcp: %s", buf);
+            DIE(ret < 0, "sock read failed");
+
+            if (ret == 0) {
+                break;
+            }
+
+            if (strcmp(buf, "ID_EXISTS") == 0) {
+                fprintf(stderr, "ID already exists\n");
+                break;
+            } else {
+                printf("%s\n", buf);
+            }
+        }
     
         if (FD_ISSET(STDIN, &tmpFd)) {
             memset(buf, 0, MAX_LEN);
@@ -81,22 +102,6 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        if (FD_ISSET(sockTCP, &tmpFd)) {
-            memset(buf, 0, MAX_LEN);
-            ret = recv(sockTCP, buf, MAX_LEN, 0);
-            DIE(ret < 0, "sock read failed");
-
-            if (ret == 0) {
-                break;
-            }
-
-            if (strcmp(buf, "ID_EXISTS") == 0) {
-                fprintf(stderr, "ID already exists\n");
-                break;
-            } else {
-                printf("%s\n", buf);
-            }
-        }
     }
 
     close(sockTCP);

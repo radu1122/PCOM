@@ -7,7 +7,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <utils.h>
+#include "utils.h"
 #include <unordered_map>
 #include <vector>
 #include <iostream>
@@ -42,7 +42,7 @@ struct data {
 };
 
 
-unordered_map<int, data> client_connected;
+unordered_map<int, data> clientsConnected;
 unordered_map<string, vector<subscriber>> topics;
 unordered_map<string, subscriber> subscribers;
 
@@ -114,12 +114,14 @@ int main(int argc, char *argv[]) {
 	int PORT = atoi(argv[1]);
 	DIE(PORT == 0, "port err");
 
+    setvbuf(stdout, NULL, _IONBF, 0);
+
     fd_set read_fds, tmp_fds;
 
     udp_packet inputPkt;
 
     struct sockaddr_in server_addr, client_addr;
-	socklen_t len = sizeof(struct sockaddr_in);
+	socklen_t sockLen = sizeof(struct sockaddr_in);
 
     memset((char *) &server_addr, 0, sizeof(server_addr));
 	server_addr.sin_family      = AF_INET;
@@ -161,7 +163,7 @@ int main(int argc, char *argv[]) {
         DIE(res == -1, "fd select err");
 	    char buf[MAX_LEN];
 
-        if (FD_ISSET(0, &tmp_fds)) { // verify stdin cmd
+        if (FD_ISSET(STDIN, &tmp_fds)) { // verify stdin cmd
             memset(buf, 0, MAX_LEN);
             fgets(buf, MAX_LEN - 1, stdin);
             if (strcmp(buf, "exit\n") == 0) {
@@ -175,10 +177,10 @@ int main(int argc, char *argv[]) {
         }
 
         for (int i = 0; i <= fd_max; i++) {
-            if (i == sockUDP) {
+            if (i == sockUDP && FD_ISSET(i, &tmp_fds)) {
                 memset(buf, 0, MAX_LEN);
-                socklen_t len = sizeof(struct sockaddr_in);
-                res = recvfrom(sockUDP, buf, MAX_LEN, 0, (struct sockaddr *) &server_addr, &len);
+                socklen_t sockLen = sizeof(struct sockaddr_in);
+                res = recvfrom(sockUDP, buf, MAX_LEN, 0, (struct sockaddr *) &server_addr, &sockLen);
                 DIE(res < 0, "UDP receive err");
 	            char udpIp[16];
                 inet_ntop(AF_INET, &(server_addr.sin_addr), udpIp, 16);
@@ -214,6 +216,60 @@ int main(int argc, char *argv[]) {
                         DIE(res < 0, "tcp send err");
                     }
                 }
+            } else if (i == sockTcp && FD_ISSET(i, &tmp_fds)) {
+                int newsockFd = accept(sockTcp, (struct sockaddr *) &client_addr, (socklen_t *) &sockLen);
+                DIE(newsockFd < 0, "TCP receive err");
+                FD_SET(newsockFd, &read_fds);
+                fd_max = max(fd_max, newsockFd);
+                char tcpIp[16];
+                inet_ntop(AF_INET, &(client_addr.sin_addr), tcpIp, 16);
+
+                struct data clientCon;
+                clientCon.ip_client_tcp   = tcpIp;
+                clientCon.port_client_tcp = client_addr.sin_port;
+
+                memset(buf, 0, MAX_LEN);
+                res = recv(newsockFd, buf, sizeof(buf), 0);
+                clientCon.client_ID = buf; // if err check this TODO
+
+
+
+                if (subscribers.find(string(buf)) != subscribers.end()) { // exista deja client id in dataset
+                    memset(buf, 0, MAX_LEN);
+                    strcpy(buf, "ID_EXISTS");
+                    res = send(newsockFd, buf, strlen(buf), 0);
+                    DIE(res < 0, "TCP send err");
+                    continue;
+                }
+
+                clientsConnected[newsockFd] = clientCon;
+
+                printf("New client %s connected from %s:%d.\n", buf, inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+
+                auto subscriber = subscribers.find(buf);
+
+                if (subscriber != subscribers.end()) {
+                    subscriber->second.connected = true;
+			    	subscriber->second.fd = newsockFd;
+                } else {
+                    struct subscriber subscriberNew;
+                    subscriberNew.connected = true;
+                    subscriberNew.fd = newsockFd;
+                    subscriberNew.clientID = buf;
+                    subscribers[buf] = subscriberNew;
+                }
+
+                clientCon = clientsConnected[newsockFd];
+                string clientID = clientCon.client_ID;
+                auto iterator = subscribers.find(clientID);
+                if (iterator == subscribers.end()) {
+                    continue;
+                }
+                
+                for (int j = 0; j < iterator->second.packets.size(); j++) {
+                    res = send(i, iterator->second.packets[j].c_str(), iterator->second.packets[j].size(), 0);
+                }
+                iterator->second.packets.clear();
             }
         }
 
