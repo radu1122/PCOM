@@ -48,17 +48,15 @@ unordered_map<string, subscriber> subscribers;
 
 udp_packet processUdpPacket(string udpIp, int port, char *buf) {
     udp_packet pkt;
-    uint16_t number;
-    uint8_t power;
     stringstream payload;
-    cout << buf << endl;
 	pkt.valid = true;
 
     switch(buf[TOPIC_SIZE]) {
     case 0:
-		memcpy(&number, buf + TOPIC_SIZE + 2, sizeof(uint32_t));
-        		number = ntohl(number);
-		pkt.payload = to_string(number);
+        uint32_t numberInt;
+		memcpy(&numberInt, buf + TOPIC_SIZE + 2, sizeof(uint32_t));
+        		numberInt = ntohl(numberInt);
+		pkt.payload = to_string(numberInt);
 
         if (buf[TOPIC_SIZE + 1] == 1) {
 			pkt.payload.insert(0, "-");
@@ -68,15 +66,18 @@ udp_packet processUdpPacket(string udpIp, int port, char *buf) {
 
         break;
     case 1:
-		memcpy(&number, buf + TOPIC_SIZE + 1, sizeof(uint16_t));
-		number = ntohs(number);
+        uint16_t numberShort;
+		memcpy(&numberShort, buf + TOPIC_SIZE + 1, sizeof(uint16_t));
+		numberShort = ntohs(numberShort);
 
-		payload << fixed << setprecision(2) << 1.0 * number / 100;
+		payload << fixed << setprecision(2) << 1.0 * numberShort / 100;
 
 		pkt.payload = payload.str();
-        pkt.type = "SHORT REAL";
+        pkt.type = "SHORT_REAL";
         break;
     case 2:
+        uint32_t number;
+		uint8_t power;
         memcpy(&number, buf + TOPIC_SIZE + 2, sizeof(uint32_t));
 		number = ntohl(number);
         memcpy(&power, buf + TOPIC_SIZE + 2 + sizeof(uint32_t), sizeof(uint8_t));
@@ -172,6 +173,7 @@ int main(int argc, char *argv[]) {
                         close(k);
                     }
                 }
+                cout << "exit" << endl;
                 break;
             }
         }
@@ -181,7 +183,7 @@ int main(int argc, char *argv[]) {
                 memset(buf, 0, MAX_LEN);
                 socklen_t sockLen = sizeof(struct sockaddr_in);
                 res = recvfrom(sockUDP, buf, MAX_LEN, 0, (struct sockaddr *) &server_addr, &sockLen);
-                cout << buf << endl;
+                // cout << buf << endl;
                 DIE(res < 0, "UDP receive err");
 	            char udpIp[16];
                 inet_ntop(AF_INET, &(server_addr.sin_addr), udpIp, 16);
@@ -269,7 +271,8 @@ int main(int argc, char *argv[]) {
                 }
                 
                 for (int j = 0; j < iterator->second.packets.size(); j++) {
-                    res = send(i, iterator->second.packets[j].c_str(), iterator->second.packets[j].size(), 0);
+                    res = send(newsockFd, iterator->second.packets[j].c_str(), iterator->second.packets[j].size(), 0);
+                    DIE(res < 0, "tcp send err");
                 }
                 iterator->second.packets.clear();
             } else if (FD_ISSET(i, &tmp_fds)) {

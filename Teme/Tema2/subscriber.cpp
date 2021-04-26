@@ -75,7 +75,7 @@ int main(int argc, char *argv[]) {
                 fprintf(stderr, "ID already exists\n");
                 break;
             }
-            printf("%s\n", buf);
+            printf("%s", buf);
         }
     
         if (FD_ISSET(STDIN, &tmpFd)) {
