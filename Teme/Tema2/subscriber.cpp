@@ -17,12 +17,13 @@ int main(int argc, char *argv[]) {
 
     DIE(argc < 4, "incorrect usage of the subscriber");
 
-    char * ID = strndup(argv[1], ID_LEN);
 	int PORT = atoi(argv[3]);
 
     DIE(PORT == 0, "Incorrect port");
 
-    int sockTCP, fdMax, ret;
+    setvbuf(stdout, NULL, _IONBF, BUFSIZ);
+
+    int sockTCP, ret;
 
     sockTCP = socket(AF_INET, SOCK_STREAM, 0);
     DIE(sockTCP < 0, "socket open err");
@@ -64,7 +65,6 @@ int main(int argc, char *argv[]) {
         if (FD_ISSET(sockTCP, &tmpFd)) {
             memset(buf, 0, MAX_LEN);
             ret = recv(sockTCP, buf, MAX_LEN, 0);
-            printf("input tcp: %s", buf);
             DIE(ret < 0, "sock read failed");
 
             if (ret == 0) {
@@ -74,9 +74,8 @@ int main(int argc, char *argv[]) {
             if (strcmp(buf, "ID_EXISTS") == 0) {
                 fprintf(stderr, "ID already exists\n");
                 break;
-            } else {
-                printf("%s\n", buf);
             }
+            printf("%s\n", buf);
         }
     
         if (FD_ISSET(STDIN, &tmpFd)) {
@@ -96,8 +95,8 @@ int main(int argc, char *argv[]) {
             }
 
             if (strncmp(buf, "exit", 4) == 0) {
-                ret = send(sockTCP, buf, strlen(buf), 0);
-                DIE(ret < 0, "send exit failed");
+                // ret = send(sockTCP, buf, strlen(buf), 0);
+                // DIE(ret < 0, "send exit failed"); TODO
                 break;
             }
         }

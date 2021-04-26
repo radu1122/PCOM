@@ -51,7 +51,7 @@ udp_packet processUdpPacket(string udpIp, int port, char *buf) {
     uint16_t number;
     uint8_t power;
     stringstream payload;
-
+    cout << buf << endl;
 	pkt.valid = true;
 
     switch(buf[TOPIC_SIZE]) {
@@ -114,7 +114,7 @@ int main(int argc, char *argv[]) {
 	int PORT = atoi(argv[1]);
 	DIE(PORT == 0, "port err");
 
-    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stdout, NULL, _IONBF, BUFSIZ);
 
     fd_set read_fds, tmp_fds;
 
@@ -126,7 +126,7 @@ int main(int argc, char *argv[]) {
     memset((char *) &server_addr, 0, sizeof(server_addr));
 	server_addr.sin_family      = AF_INET;
 	server_addr.sin_addr.s_addr = INADDR_ANY;
-	server_addr.sin_port        = htons(PORT);
+	server_addr.sin_port        = htons((uint16_t)PORT);
 
     int sockTcp = socket(AF_INET, SOCK_STREAM, 0);
     DIE(sockTcp < 0, "tcp sock open err");
@@ -176,11 +176,12 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        for (int i = 0; i <= fd_max; i++) {
+        for (int i = 1; i <= fd_max; i++) {
             if (i == sockUDP && FD_ISSET(i, &tmp_fds)) {
                 memset(buf, 0, MAX_LEN);
                 socklen_t sockLen = sizeof(struct sockaddr_in);
                 res = recvfrom(sockUDP, buf, MAX_LEN, 0, (struct sockaddr *) &server_addr, &sockLen);
+                cout << buf << endl;
                 DIE(res < 0, "UDP receive err");
 	            char udpIp[16];
                 inet_ntop(AF_INET, &(server_addr.sin_addr), udpIp, 16);
@@ -193,7 +194,7 @@ int main(int argc, char *argv[]) {
                 }
 
                 stringstream stream;
-                stream << data.ip_client_udp << ":" << data.port_client_udp << " - ";
+                stream << udpIp << ":" << server_addr.sin_port << " - ";
                 stream << data.topic << " - " << data.type << " - " << data.payload << "\n";
 
                 auto topic = topics.find(data.topic);
@@ -232,9 +233,10 @@ int main(int argc, char *argv[]) {
                 res = recv(newsockFd, buf, sizeof(buf), 0);
                 clientCon.client_ID = buf; // if err check this TODO
 
+                auto subscriberCon = subscribers.find(string(buf));
 
-
-                if (subscribers.find(string(buf)) != subscribers.end()) { // exista deja client id in dataset
+                if (subscriberCon != subscribers.end() && subscriberCon->second.connected == true) { // exista deja client id in dataset
+                    printf("Client %s already connected.\n", buf);
                     memset(buf, 0, MAX_LEN);
                     strcpy(buf, "ID_EXISTS");
                     res = send(newsockFd, buf, strlen(buf), 0);
@@ -270,6 +272,96 @@ int main(int argc, char *argv[]) {
                     res = send(i, iterator->second.packets[j].c_str(), iterator->second.packets[j].size(), 0);
                 }
                 iterator->second.packets.clear();
+            } else if (FD_ISSET(i, &tmp_fds)) {
+                memset(buf, 0, MAX_LEN);
+                res = recv(i, buf, sizeof(buf), 0);
+                DIE(res < 0, "tcp receive err");
+                if (res == 0) {
+                    if (clientsConnected[i].client_ID.size() != 0) {
+                        cout << "Client " << clientsConnected[i].client_ID << " disconnected.\n";
+
+                        auto subscriber = subscribers.find(string(clientsConnected[i].client_ID));
+                        if (subscriber != subscribers.end()) {
+                            subscriber->second.connected = false;
+                        }
+                        clientsConnected.erase(i);
+
+                        close(i);
+                        FD_CLR(i, &read_fds);
+                        continue;
+                    }
+                }
+                if (strncmp(buf, "unsubscribe", 11) == 0) {
+                    char topicStr[51];
+                    char junk[16];
+
+                    sscanf(buf,"%s %s", junk, topicStr);
+
+                    auto topic = topics.find(topicStr);
+
+                    if (topic == topics.end()) {
+                        continue;
+                    }
+
+                    auto clientCon = clientsConnected.find(i);
+                    if (clientCon == clientsConnected.end()) {
+                        continue;
+                    }
+
+                    for (int j = 0; j < topic->second.size(); j++) {
+                        if (clientCon->second.client_ID == topic->second[j].clientID) {
+                            topic->second.erase(topic->second.begin() + i);
+                            break;
+                        }
+                    }
+                } else if (strncmp(buf, "subscribe", 9) == 0) {
+                    char topicStr[51];
+                    char junk[16];
+                    int SFInt;
+                    bool SF;
+
+                    sscanf(buf,"%s %s %d", junk, topicStr, &SFInt);
+
+                    if (SFInt == 0) {
+                        SF = false;
+                    } else {
+                        SF = true;
+                    }
+
+                    auto clientCon = clientsConnected.find(i);
+                    if (clientCon == clientsConnected.end()) {
+                        continue;
+                    }
+
+                    auto topic = topics.find(topicStr);
+
+                    bool found = false;
+
+                    if (topic != topics.end()) {
+                        for (subscriber subscriber : topic->second) {
+                            if (subscriber.clientID == clientCon->second.client_ID) {
+                                subscriber.SF = SF;
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found) {
+                            struct subscriber subscriberNew;
+                            subscriberNew.clientID = clientCon->second.client_ID;
+                            subscriberNew.SF = SF;
+                            topic->second.push_back(subscriberNew);
+                        }
+                    } else {
+                            vector<subscriber> subscribersNew;
+                            struct subscriber subscriberNew;
+                            subscriberNew.clientID = clientCon->second.client_ID;
+                            subscriberNew.SF = SF;
+                            subscribersNew.push_back(subscriberNew);
+                            topics[topicStr] = subscribersNew;
+                    }
+                    
+                }
+                
             }
         }
 

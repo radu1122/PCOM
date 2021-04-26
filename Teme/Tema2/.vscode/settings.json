@@ -4,6 +4,7 @@
         "iostream": "cpp",
         "unordered_map": "cpp",
         "system_error": "cpp",
-        "iosfwd": "cpp"
+        "iosfwd": "cpp",
+        "ostream": "cpp"
     }
 }
