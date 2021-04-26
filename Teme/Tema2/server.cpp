@@ -168,12 +168,24 @@ int main(int argc, char *argv[]) {
             memset(buf, 0, MAX_LEN);
             fgets(buf, MAX_LEN - 1, stdin);
             if (strcmp(buf, "exit\n") == 0) {
-                for (int k = 0; k <= fd_max; k++) {
-                    if (FD_ISSET(k, &tmp_fds)) {
-                        close(k);
-                    }
+                // for (int k = 1; k <= fd_max; k++) {
+                //     if (FD_ISSET(k, &tmp_fds)) {
+                //         memset(buf, 0, MAX_LEN);
+                //         strcpy(buf, ";EXIT;\n");
+                //         res = send(k, buf, strlen(buf), 0);
+                //         DIE(res < 0, "UDP receive err");
+                //         close(k);
+                //     }
+                // }
+                unordered_map<int, data>::iterator it = clientsConnected.begin();
+                while(it != clientsConnected.end()) {
+                    memset(buf, 0, MAX_LEN);
+                    strcpy(buf, ";EXIT;\n");
+                    res = send(it->first, buf, strlen(buf), 0);
+                    DIE(res < 0, "UDP receive err");
+                    close(it->first);
+                    it++;
                 }
-                cout << "exit" << endl;
                 break;
             }
         }
@@ -240,7 +252,7 @@ int main(int argc, char *argv[]) {
                 if (subscriberCon != subscribers.end() && subscriberCon->second.connected == true) { // exista deja client id in dataset
                     printf("Client %s already connected.\n", buf);
                     memset(buf, 0, MAX_LEN);
-                    strcpy(buf, "ID_EXISTS");
+                    strcpy(buf, ";ID_EXISTS;\n");
                     res = send(newsockFd, buf, strlen(buf), 0);
                     DIE(res < 0, "TCP send err");
                     continue;
