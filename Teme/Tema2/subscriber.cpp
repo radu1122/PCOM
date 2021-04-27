@@ -63,9 +63,8 @@ int main(int argc, char *argv[]) {
         DIE(ret < 0, "sock select err");
     
 
-        if (FD_ISSET(sockTCP, &tmpFd)) {
+        if (FD_ISSET(sockTCP, &tmpFd)) { // receive pe TCP
             memset(buf, 0, MAX_LEN);
-            // ret = recv(sockTCP, buf, MAX_LEN, 0);
             size_t bufPtr = 0;
             while (bufPtr < MAX_LEN && 1 == recv(sockTCP, &buf[bufPtr], 1, 0)) {
                 if (bufPtr > 0 && '\n' == buf[bufPtr]) {
@@ -82,7 +81,7 @@ int main(int argc, char *argv[]) {
             printf("%s", buf);
         }
     
-        if (FD_ISSET(STDIN, &tmpFd)) {
+        if (FD_ISSET(STDIN, &tmpFd)) { // comenzi de la stdin
             memset(buf, 0, MAX_LEN);
             fgets(buf, MAX_LEN - 1, stdin);
             
