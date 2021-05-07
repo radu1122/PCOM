@@ -1,0 +1,102 @@
+----------------- punctul a --------------------
+
+$ dig A single-v4.protocoale.club +short
+127.0.0.1
+
+----------------- punctul b --------------------
+
+$ dig AAAA single-v6.protocoale.club +short
+::1
+
+----------------- punctul c --------------------
+
+$ dig MX protocoale.club +short
+30 alt3.gmail-smtp-in.l.google.com.
+20 alt2.gmail-smtp-in.l.google.com.
+10 alt1.gmail-smtp-in.l.google.com.
+
+----------------- punctul d --------------------
+
+$ dig A @potato.dfilip.xyz dorinel.protocoale.club +noall +authority
+
+dorinel.protocoale.club. 300	IN	NS	potato.dfilip.xyz.
+
+dorinel.protocoale.club. 300	IN	NS	potato.dfilip.xyz.
+
+----------------- punctul e --------------------
+
+$ dig A google.com @107.191.48.176 +short
+
+142.250.190.110
+
+$ dig A google.com @8.8.8.8 +short
+
+172.217.20.14
+
+& dig A google.com @196.200.184.31 +short
+
+216.58.215.174
+
+----------------- punctul f --------------------
+
+$ dig -f cerereBulk +noall +answer
+
+single-v4.protocoale.club. 5	IN	A	127.0.0.1
+single.protocoale.club.	5	IN	A	127.0.0.1
+multi.protocoale.club.	5	IN	A	127.1.1.1
+multi.protocoale.club.	5	IN	A	127.2.2.2
+multi.protocoale.club.	5	IN	A	127.3.3.3
+multi.protocoale.club.	5	IN	A	127.4.4.4
+
+----------------- punctul g --------------------
+
+$ dig test.dorinel.protocoale.club
+
+; <<>> DiG 9.11.3-1ubuntu1.14-Ubuntu <<>> test.dorinel.protocoale.club
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 42852
+;; flags: qr rd ra; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 65494
+;; QUESTION SECTION:
+;test.dorinel.protocoale.club.	IN	A
+
+;; ANSWER SECTION:
+test.dorinel.protocoale.club. 5	IN	A	127.0.42.0
+test.dorinel.protocoale.club. 5	IN	A	127.0.0.42
+
+;; Query time: 173 msec
+;; SERVER: 127.0.0.53#53(127.0.0.53)
+;; WHEN: Fri May 07 01:14:06 PDT 2021
+;; MSG SIZE  rcvd: 89
+
+----------------- punctul h --------------------
+
+$ dig -x 8.8.4.4 +noall +answer
+
+4.4.8.8.in-addr.arpa.	5	IN	PTR	dns.google.
+Adresa este inversata pentru ca se schimba endianessul
+
+----------------- punctul i --------------------
+
+Am o problema cu masina si nu pot instala wireshark
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
