@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include "utils.h"
+#include <iostream>
 
 
 using namespace std;
@@ -62,23 +63,25 @@ int main(int argc, char *argv[]) {
         DIE(ret < 0, "sock select err");
     
 
-        if (FD_ISSET(sockTCP, &tmpFd)) {
+        if (FD_ISSET(sockTCP, &tmpFd)) { // receive pe TCP
             memset(buf, 0, MAX_LEN);
-            ret = recv(sockTCP, buf, MAX_LEN, 0);
-            DIE(ret < 0, "sock read failed");
-
-            if (ret == 0) {
-                break;
+            size_t bufPtr = 0;
+            while (bufPtr < MAX_LEN && 1 == recv(sockTCP, &buf[bufPtr], 1, 0)) {
+                if (bufPtr > 0 && '\n' == buf[bufPtr]) {
+                    break;
+                }
+                bufPtr++;
             }
-
-            if (strcmp(buf, "ID_EXISTS") == 0) {
+            if (strncmp(buf, ";ID_EXISTS;", 11) == 0) {
                 fprintf(stderr, "ID already exists\n");
                 break;
+            } else if (strncmp(buf, ";EXIT;", 6) == 0) {
+                break;
             }
-            printf("%s\n", buf);
+            printf("%s", buf);
         }
     
-        if (FD_ISSET(STDIN, &tmpFd)) {
+        if (FD_ISSET(STDIN, &tmpFd)) { // comenzi de la stdin
             memset(buf, 0, MAX_LEN);
             fgets(buf, MAX_LEN - 1, stdin);
             
@@ -95,8 +98,6 @@ int main(int argc, char *argv[]) {
             }
 
             if (strncmp(buf, "exit", 4) == 0) {
-                // ret = send(sockTCP, buf, strlen(buf), 0);
-                // DIE(ret < 0, "send exit failed"); TODO
                 break;
             }
         }

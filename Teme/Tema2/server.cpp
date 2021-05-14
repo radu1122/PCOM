@@ -48,17 +48,15 @@ unordered_map<string, subscriber> subscribers;
 
 udp_packet processUdpPacket(string udpIp, int port, char *buf) {
     udp_packet pkt;
-    uint16_t number;
-    uint8_t power;
     stringstream payload;
-    cout << buf << endl;
 	pkt.valid = true;
 
     switch(buf[TOPIC_SIZE]) {
     case 0:
-		memcpy(&number, buf + TOPIC_SIZE + 2, sizeof(uint32_t));
-        		number = ntohl(number);
-		pkt.payload = to_string(number);
+        uint32_t numberInt;
+		memcpy(&numberInt, buf + TOPIC_SIZE + 2, sizeof(uint32_t));
+        		numberInt = ntohl(numberInt);
+		pkt.payload = to_string(numberInt);
 
         if (buf[TOPIC_SIZE + 1] == 1) {
 			pkt.payload.insert(0, "-");
@@ -68,15 +66,18 @@ udp_packet processUdpPacket(string udpIp, int port, char *buf) {
 
         break;
     case 1:
-		memcpy(&number, buf + TOPIC_SIZE + 1, sizeof(uint16_t));
-		number = ntohs(number);
+        uint16_t numberShort;
+		memcpy(&numberShort, buf + TOPIC_SIZE + 1, sizeof(uint16_t));
+		numberShort = ntohs(numberShort);
 
-		payload << fixed << setprecision(2) << 1.0 * number / 100;
+		payload << fixed << setprecision(2) << 1.0 * numberShort / 100;
 
 		pkt.payload = payload.str();
-        pkt.type = "SHORT REAL";
+        pkt.type = "SHORT_REAL";
         break;
     case 2:
+        uint32_t number;
+		uint8_t power;
         memcpy(&number, buf + TOPIC_SIZE + 2, sizeof(uint32_t));
 		number = ntohl(number);
         memcpy(&power, buf + TOPIC_SIZE + 2 + sizeof(uint32_t), sizeof(uint8_t));
@@ -167,21 +168,24 @@ int main(int argc, char *argv[]) {
             memset(buf, 0, MAX_LEN);
             fgets(buf, MAX_LEN - 1, stdin);
             if (strcmp(buf, "exit\n") == 0) {
-                for (int k = 0; k <= fd_max; k++) {
-                    if (FD_ISSET(k, &tmp_fds)) {
-                        close(k);
-                    }
+                unordered_map<int, data>::iterator it = clientsConnected.begin();
+                while(it != clientsConnected.end()) { // inchide toate conexiunile si anunta clientii
+                    memset(buf, 0, MAX_LEN);
+                    strcpy(buf, ";EXIT;\n");
+                    res = send(it->first, buf, strlen(buf), 0);
+                    DIE(res < 0, "UDP receive err");
+                    close(it->first);
+                    it++;
                 }
                 break;
             }
         }
 
         for (int i = 1; i <= fd_max; i++) {
-            if (i == sockUDP && FD_ISSET(i, &tmp_fds)) {
+            if (i == sockUDP && FD_ISSET(i, &tmp_fds)) { // primeste pe socketul de UDP
                 memset(buf, 0, MAX_LEN);
                 socklen_t sockLen = sizeof(struct sockaddr_in);
                 res = recvfrom(sockUDP, buf, MAX_LEN, 0, (struct sockaddr *) &server_addr, &sockLen);
-                cout << buf << endl;
                 DIE(res < 0, "UDP receive err");
 	            char udpIp[16];
                 inet_ntop(AF_INET, &(server_addr.sin_addr), udpIp, 16);
@@ -189,11 +193,11 @@ int main(int argc, char *argv[]) {
                 struct udp_packet data;
                 data = processUdpPacket(udpIp, server_addr.sin_port, buf);
 
-                if (!data.valid) {
+                if (!data.valid) { // verifica daca pachetul este valid
                     continue;
                 }
 
-                stringstream stream;
+                stringstream stream; // generare mesaj pentru client
                 stream << udpIp << ":" << server_addr.sin_port << " - ";
                 stream << data.topic << " - " << data.type << " - " << data.payload << "\n";
 
@@ -202,22 +206,24 @@ int main(int argc, char *argv[]) {
                     continue;
                 }
 
-                for (subscriber subscriber : topic->second) {
+                for (subscriber subscriber : topic->second) { 
                     auto subscriberData = subscribers.find(subscriber.clientID);
                     if (subscriberData == subscribers.end()) {
                         continue;
                     }
 
                     if (!subscriberData->second.connected && subscriber.SF) {
+                        // adauga mesajul in coada pentru clientii cu SF 1
                         subscriberData->second.packets.push_back(stream.str());
                     }
 
                     if (subscriberData->second.connected) {
+                        // trimite mesajul la clienti
                         res = send(subscriberData->second.fd, stream.str().c_str(), stream.str().size(), 0);
                         DIE(res < 0, "tcp send err");
                     }
                 }
-            } else if (i == sockTcp && FD_ISSET(i, &tmp_fds)) {
+            } else if (i == sockTcp && FD_ISSET(i, &tmp_fds)) { // client nou
                 int newsockFd = accept(sockTcp, (struct sockaddr *) &client_addr, (socklen_t *) &sockLen);
                 DIE(newsockFd < 0, "TCP receive err");
                 FD_SET(newsockFd, &read_fds);
@@ -231,14 +237,15 @@ int main(int argc, char *argv[]) {
 
                 memset(buf, 0, MAX_LEN);
                 res = recv(newsockFd, buf, sizeof(buf), 0);
-                clientCon.client_ID = buf; // if err check this TODO
+                clientCon.client_ID = buf;
 
                 auto subscriberCon = subscribers.find(string(buf));
 
-                if (subscriberCon != subscribers.end() && subscriberCon->second.connected == true) { // exista deja client id in dataset
+                if (subscriberCon != subscribers.end() && subscriberCon->second.connected == true) {
+                    // exista deja client id in datasetul de clienti conectati
                     printf("Client %s already connected.\n", buf);
                     memset(buf, 0, MAX_LEN);
-                    strcpy(buf, "ID_EXISTS");
+                    strcpy(buf, ";ID_EXISTS;\n");
                     res = send(newsockFd, buf, strlen(buf), 0);
                     DIE(res < 0, "TCP send err");
                     continue;
@@ -250,6 +257,7 @@ int main(int argc, char *argv[]) {
 
                 auto subscriber = subscribers.find(buf);
 
+                // update state client
                 if (subscriber != subscribers.end()) {
                     subscriber->second.connected = true;
 			    	subscriber->second.fd = newsockFd;
@@ -267,16 +275,17 @@ int main(int argc, char *argv[]) {
                 if (iterator == subscribers.end()) {
                     continue;
                 }
-                
+                // i se t rimit pachetele din coada daca exista
                 for (int j = 0; j < iterator->second.packets.size(); j++) {
-                    res = send(i, iterator->second.packets[j].c_str(), iterator->second.packets[j].size(), 0);
+                    res = send(newsockFd, iterator->second.packets[j].c_str(), iterator->second.packets[j].size(), 0);
+                    DIE(res < 0, "tcp send err");
                 }
                 iterator->second.packets.clear();
-            } else if (FD_ISSET(i, &tmp_fds)) {
+            } else if (FD_ISSET(i, &tmp_fds)) { // primire pe TCP de la clienti deja conectati
                 memset(buf, 0, MAX_LEN);
                 res = recv(i, buf, sizeof(buf), 0);
                 DIE(res < 0, "tcp receive err");
-                if (res == 0) {
+                if (res == 0) { // beacon de disconnect
                     if (clientsConnected[i].client_ID.size() != 0) {
                         cout << "Client " << clientsConnected[i].client_ID << " disconnected.\n";
 
@@ -291,7 +300,7 @@ int main(int argc, char *argv[]) {
                         continue;
                     }
                 }
-                if (strncmp(buf, "unsubscribe", 11) == 0) {
+                if (strncmp(buf, "unsubscribe", 11) == 0) { // pachet cu flag de unsubscribe
                     char topicStr[51];
                     char junk[16];
 
@@ -314,7 +323,7 @@ int main(int argc, char *argv[]) {
                             break;
                         }
                     }
-                } else if (strncmp(buf, "subscribe", 9) == 0) {
+                } else if (strncmp(buf, "subscribe", 9) == 0) { // pachet cu flag de subscribe
                     char topicStr[51];
                     char junk[16];
                     int SFInt;
