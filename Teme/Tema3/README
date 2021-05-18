@@ -1,0 +1,25 @@
+Copyright Radu-Andrei Dumitrescu 322CA 2021
+
+Timp de lucru: aproximativ 3h intr-o zi
+
+Makefile:
+    - client: genereaza executabilul
+    - run: ruleaza executabilul
+    - clean: face cleanup la executabilul
+
+Pentru send / receive server am ales sa folosesc buffer si helpers oferite in labul 10.
+
+Pe partea de requests am ales sa imi scriu singur pachetul de request, am ales o abordare destul de quick and dirty pentru a crea pachetele,
+dar am considerat ca se accepta avand in vedere ce ne intereseaza abordarea, nu neaparat sa fie codul clean.
+
+In main am facut un while care intereseaza fara oprire, dar din care se poate iesi cu comanda exit.
+
+Pentru parsare am ales sa imi fac custom, fara sa folosesc librariile de parsare json. Am facut aceasta alegere pentru ca mi s-a parut mai usor asa.
+
+Toate requesturile le-am testat inainte cu Postman.
+
+Probleme intampinate:
+    - dupa 2,3 requests nu mai imi raspundea serverul, asa ca am ales sa deschid si sa inchid conexiunea la fiecare request
+
+Feedback:
+    - interesanta tema over all, desi este mult mai usor sa faci asemenea taskuri in limbaj precum javascript
