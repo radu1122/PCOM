@@ -1,0 +1,2 @@
+Atunci cand m-am conectat cu http toate informatiile despre login au fost trimise plain text,
+dar cand m-am conectat cu https, datele erau criptate

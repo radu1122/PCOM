@@ -1,0 +1,3 @@
+Version: TLS 1.2
+Cipher Suite: TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+Algorithm Identifier: sha256WithRSAEncryption
