@@ -1,37 +1,39 @@
 Copyright Radu-Andrei Dumitrescu 322CA 2021
 
-Tema2 PCOM - creare de server care realizeaza comunicatia intre un sender de UDP si mai multi clienti print TCP
+Folosire client: ./client <id> <port>
+Folosire server: ./server <port>
 
-Timp de lucru: aproximativ 6h pe parcursul a 4 zile
+Am implementat toate functionalitatile.
+
+Client:
+    - pot exista oricat de multi clienti
+    - nu pot exista 2 clienti cu acelasi id in acelasi Timp
+    - daca un client se deconecteaza si apoi se reconecteaza suma de bani ramane neschimbata
+    - nu se pot trimite bani unui id care nu se exista
+    - nu se pot trimite bani id-ului tau
+    - toate functionalitatile merg corect
+    - am implementat si verificari pentru input invalid
 
 Server:
-     - am folosit FD pentru operatiile cu socketi
-     - am impartit logica in 4 zone
-        - FD pe STDIN unde puteam primi exit
-        - FD pentru senderul de UDP
-            - aici primeam un pachet standard pe care il parsam
-            - verificam daca am clienti catre care trebuie sa trimit pachetul si daca am clienti
-              pentru care sa pastrez pachetul in coada
-        - socket liber pentru client nou
-            - aici am implementat o logica de verifica daca e client nou,
-              daca nu era si exista deja ID-ul ii trimiteam mesajul ";ID_EXISTS;\n",
-            - daca nu era client nou, dar nu era conectat deja faceam update in dataset cu noile info despre el
-        - socket de receive pentru fiecare client conectat pe TCP
-            - puteam primi mesaj de subscribe, unsubscribe si beacon de disconnnect
-        
-Subscriber:
-    - se conecteaza la server
-    - isi trimite id-ul la conectare
-    - asteapta comenzi de la stdin cu subscribe / unsubscribe sau exit
-        - trimite mesajul mai departe pe tcp
-    - pe socketul de TCP am implementat un protocol care citeste date pana la '\n'
-    - delimitatorul de pachete fiind '\n'
-    - flagurile de err si exit le-am delimitat astfel: ";{flag};"
+    - primeste de la client comenzile
+    - proceseaza datele care sunt sub forma unui haspMap cu key ID si value un struct care contine isConnected si suma de bani a acelui client
+    - trimite catre server mesaje clare de response:
+        - ;USER_EXISTS; - daca userul este deja conectat
+        - ;MONEY_SENT; - daca banii au fost trimisi cu success
+        - ;GET_ERROR; - daca suma de bani ceruta este prea mare
+        - ;GET_MONEY <sum> - daca banii au fost extrasi cu succes si ce suma
+        - ;EXIT; - nu am reusit sa implementez la nivel de server sa se inchida clientul o data cu serverul
+        - ;SHOW_SUM <sum> - trimite catre client suma de bani actuala din cont
+    - el primeste comenzile de la client serializat asa cum sunt primite de la input de client + ID client care trimite
 
-
-Probleme intampinate:
-    - fara sa dezactivez bufferul de std nu am reusit in niciun fel sa fac checkerul sa citeasca de la stdout
-    - pe quick flow nu reuseam sa fac delimitarea intre pachete
+Surse de inspiratie: 
+    - tema 2 la PCOM a mea: https://github.com/radu1122/PCOM/blob/master/Teme/Tema2/server.cpp
+        - daca este nevoie pot oferi unui asistent acces la git pentru a confirma
+    - https://www.geeksforgeeks.org/udp-client-server-using-connect-c-implementation/
+        - aveam un bug ca serverul nu trimitea mesaje catre client, desi clientul trimitea catre server ok 
+        - m-am folosit de aceasta sursa de inspiratie ca sa vad ca greseam un bind pe Server
 
 Feedback:
-    - foarte faina tema, mi s-a parut challenging ca sa invatam sa lucram cat mai bine cu socketi
+    - destul de challenging sa implementez in 2 ore functionalitatile complete
+
+PS: ma astept sa mai fie diverse edge caseuri sau inputuri invalide pe care nu le-am luat in calcul
